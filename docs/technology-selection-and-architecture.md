@@ -24,6 +24,7 @@ Core principles:
 | Runtime | Bun | Fast TypeScript execution, native HTTP, SQL, S3, subprocess, and test support |
 | Package manager | Bun workspaces and `bun.lock` | One tool for installation, scripts, and workspace dependency management |
 | Management UI | React + Vite + TypeScript | Mature browser ecosystem and consistent dashboard template tooling |
+| CLI | Bun-compiled TypeScript executable named `mda` | Full scriptable access to the same Control Plane API as the web UI |
 | HTTP server | `Bun.serve` | Native routing, Web APIs, streaming responses, and no required server framework |
 | API style | REST/JSON + SSE | Simple commands over HTTP and one-way Agent event streaming |
 | Runtime validation | TypeBox + JSON Schema | Reuses the schema style required by Pi Tools and supports machine-readable contracts |
@@ -53,6 +54,7 @@ Bun is used for:
 - Running subprocesses in the Agent Runner.
 - Running tests.
 - Building the management UI and generated dashboards through Vite.
+- Running and compiling the `mda` CLI.
 
 Standard commands:
 
@@ -124,10 +126,10 @@ PostgreSQL, Bun workspaces, native Fetch/Web Streams, and small domain modules c
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│ Browser                                                      │
+│ Clients                                                      │
 │                                                              │
-│ Management UI / Viewer Host                                  │
-│ Chat, revisions, sources, publish, share, preview shell      │
+│ Browser: Management UI / Viewer Host / Preview shell         │
+│ mda CLI: commands / chat / events / diagnostics / export     │
 └───────────────────────┬──────────────────────────────────────┘
                         │ HTTPS: REST + SSE
 ┌───────────────────────▼──────────────────────────────────────┐
@@ -178,7 +180,13 @@ A React/Vite single-page application that provides:
 
 The production build is static and may be served by the Control Plane or a CDN. It contains no database credentials, model credentials, or data-source credentials.
 
-### 7.2 Control Plane
+### 7.2 mda CLI
+
+A Bun-compiled TypeScript client that provides complete, scriptable access to the same Control Plane operations as the web UI, including continuous conversations, raw event streams, Tool and error inspection, simulations, and artifact export.
+
+The CLI contains presentation and client concerns only. It does not connect directly to Pi, PostgreSQL, Object Storage, or data sources. Its complete command and interaction contract is defined in `docs/mda-cli-design.md`.
+
+### 7.3 Control Plane
 
 A Bun service built on `Bun.serve` that owns:
 
@@ -193,7 +201,7 @@ A Bun service built on `Bun.serve` that owns:
 
 The Control Plane never executes generated dashboard code and never gives its data-source credentials to the Agent Runner.
 
-### 7.3 Agent Controller
+### 7.4 Agent Controller
 
 A Bun process that:
 
@@ -207,7 +215,7 @@ A Bun process that:
 
 The Agent Controller is separate from the public Control Plane so the web-facing process never needs container-launch privileges.
 
-### 7.4 Agent Runner
+### 7.5 Agent Runner
 
 An ephemeral Bun execution environment containing:
 
@@ -220,11 +228,11 @@ An ephemeral Bun execution environment containing:
 
 One Runner handles one Agent Job and then exits. It does not retain another tenant's workspace or credentials.
 
-### 7.5 PostgreSQL
+### 7.6 PostgreSQL
 
 PostgreSQL stores transactional metadata, job state, and durable event cursors. It does not store large source archives or built bundles.
 
-### 7.6 Object Storage
+### 7.7 Object Storage
 
 S3-compatible storage contains:
 
@@ -245,6 +253,7 @@ Use Bun workspaces without an additional monorepo framework:
 mda/
 ├── apps/
 │   ├── web/                  # React management UI and viewer host
+│   ├── cli/                  # Bun CLI executable named mda
 │   ├── control-plane/        # Bun HTTP API, SSE, Data Gateway
 │   ├── agent-controller/     # Job leasing and Runner orchestration
 │   └── agent-runner/         # Pi SDK integration and Tool execution
@@ -283,7 +292,7 @@ Do not add abstract interfaces with one implementation merely to imitate Clean A
 
 ### 9.2 Shared Contracts
 
-`packages/contracts` is the only package shared by browser, Control Plane, and Agent code. It contains:
+`packages/contracts` is the only package shared by the browser, CLI, Control Plane, and Agent code. It contains:
 
 - TypeBox request and response schemas.
 - Dashboard Manifest schema.
@@ -833,7 +842,7 @@ The Data Gateway becomes a separate service only if source network placement, qu
 ### Phase 1: Foundation
 
 1. Create Bun workspace and strict TypeScript configuration.
-2. Add `contracts`, Control Plane, Web, and Agent Runner workspaces.
+2. Add `contracts`, Control Plane, Web, CLI, and Agent Runner workspaces.
 3. Add PostgreSQL migrations and Bun SQL access.
 4. Add S3-compatible artifact storage.
 5. Add shared error and configuration schemas.
@@ -888,3 +897,4 @@ The architecture is acceptable when:
 11. The aesthetics Skill guides appearance without defining a component schema.
 12. The Coding Agent retains full control over `src/**` and `public/**`.
 13. The system operates without Redis, Kafka, Kubernetes, an ORM, or a low-code DSL in the first version.
+14. The `mda` CLI reaches feature parity through the same Control Plane API and stable event contracts used by the web client.
