@@ -143,7 +143,7 @@ The system must fix only these boundaries:
 - Publishing format.
 - Runtime security policy.
 
-The first version should use one fixed frontend template, component library, and charting library, and should not allow the Agent to install arbitrary npm dependencies. Add a reviewed dependency catalog only when the fixed dependencies demonstrably cannot meet business requirements.
+The first version should use one fixed frontend build template with a broad set of optional, pre-approved UI and visualization dependencies. The Agent is not required to use any particular component or charting library, but it cannot install arbitrary packages. Expand the reviewed dependency catalog only when the existing options demonstrably cannot meet business requirements.
 
 ## 6. Responsibilities of Skills and Tools
 
@@ -290,7 +290,7 @@ A Pi Session may contain prompts, schemas, sample data, and Tool output. Therefo
 
 ### SDK
 
-Suitable for Node.js/TypeScript Workers:
+Suitable for TypeScript Workers running on Bun's Node-compatible runtime:
 
 - Type safety.
 - Direct access to `AgentSession` state and events.
@@ -303,7 +303,7 @@ The first version should use the SDK directly inside an isolated Worker.
 
 Suitable when:
 
-- The management system does not use Node.js.
+- The integration is written in another language or requires a subprocess boundary.
 - Pi should run as an independent subprocess.
 - A language-neutral JSONL protocol is required.
 
@@ -313,7 +313,7 @@ RPC provides a process boundary but is not itself a security boundary. The RPC p
 
 The first version should implement only:
 
-1. One fixed frontend template and charting library.
+1. One fixed frontend build template with optional, pre-approved visualization libraries.
 2. One read-only data source.
 3. One independent Docker Worker running the Pi SDK.
 4. Chat events streamed to the browser through SSE.
@@ -325,7 +325,7 @@ The first version should implement only:
 The first version should not implement:
 
 - Multiple frontend frameworks.
-- Arbitrary npm package installation.
+- Arbitrary package installation.
 - A plugin marketplace.
 - Multi-Agent collaboration.
 - Concurrent multi-user editing of one dashboard.

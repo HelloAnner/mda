@@ -60,7 +60,7 @@ dashboard/
 
 The first version must not allow the Agent to modify `package.json` directly or install arbitrary dependencies. The platform should provide sufficiently general dependencies without restricting how `src/` is organized or implemented.
 
-If a real need emerges later, add an explicit `request_dependency` workflow in which the platform reviews and updates the dependency template instead of allowing arbitrary `npm install` commands.
+If a real need emerges later, add an explicit `request_dependency` workflow in which the platform reviews and updates the dependency template instead of allowing arbitrary `bun add` commands.
 
 ## 4. Manifest Boundary
 
@@ -188,7 +188,7 @@ Filters, linked interactions, and data transformation within the page remain fre
 The platform specifies only one command and one output:
 
 ```bash
-npm run build
+bun run build
 ```
 
 A successful build must produce:
@@ -216,7 +216,7 @@ Whether the implementation uses React Router, a global state library, or another
 It must validate that:
 
 1. `dashboard.manifest.json` conforms to its Schema.
-2. `npm run build` succeeds.
+2. `bun run build` succeeds.
 3. `dist/index.html` exists.
 4. Every Query ID in the Manifest exists and is authorized.
 5. Query parameters match their definitions.
