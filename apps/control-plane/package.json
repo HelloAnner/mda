@@ -1,0 +1,15 @@
+{
+  "name": "@mda/control-plane",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/server.ts",
+    "start": "bun src/server.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@mda/contracts": "workspace:*",
+    "@sinclair/typebox": "0.34.52"
+  }
+}

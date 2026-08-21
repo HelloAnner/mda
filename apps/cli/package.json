@@ -1,0 +1,17 @@
+{
+  "name": "@mda/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "mda": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "bun src/main.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@mda/contracts": "workspace:*",
+    "@sinclair/typebox": "0.34.52"
+  }
+}
