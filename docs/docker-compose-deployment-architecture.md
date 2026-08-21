@@ -37,6 +37,8 @@ Docker Compose is the initial single-host deployment target for:
 
 Docker Compose is not a multi-host scheduler. High availability across machines requires a later container platform, but the image and service boundaries defined here must remain valid.
 
+The Bounded Contexts, aggregates, and application module ownership inside these images are defined in `docs/domain-driven-design-structure.md`.
+
 ## 3. Images
 
 ### 3.1 `mda-main`
@@ -173,6 +175,7 @@ tenants
 users
 memberships
 dashboards
+draft_checkpoints
 dashboard_revisions
 publications
 share_links
@@ -180,6 +183,7 @@ dashboard_query_bindings
 agent_sessions
 agent_jobs
 agent_events
+control_idempotency_keys
 control_outbox
 audit_events
 ```
@@ -195,6 +199,7 @@ data_source_schema_revisions
 data_source_health
 query_definitions
 query_revisions
+source_idempotency_keys
 source_events
 source_outbox
 source_audit_events

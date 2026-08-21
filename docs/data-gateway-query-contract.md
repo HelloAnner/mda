@@ -255,6 +255,8 @@ The Coding Agent owns the HTTP or JDBC query operation, name, description, and p
 
 The result schema is inferred from a successful validation query when possible. It describes returned data and does not imply a visualization.
 
+`sourceConfigRevision` records validation provenance. Runtime execution uses the Source's currently active Config Revision, so compatible connection updates and credential rotation do not require a new Dashboard Publication. Config activation invalidates affected pools and cache entries.
+
 ## 9. Query Revisions
 
 Registered query revisions are immutable.
@@ -533,14 +535,19 @@ Audit records describe data access only. They do not inspect or classify dashboa
 Data source lifecycle:
 
 ```text
-active → disabled
-   │
-   └→ unavailable → active
+draft ──→ active ⇄ disabled
+  │          │          │
+  └──────────┴──────────┴──→ deleted
+                                │
+                                └→ disabled after restore
 ```
 
+- **draft**: Configuration exists but no tested revision is active.
 - **active**: New queries may be explored, registered, and executed.
 - **disabled**: Access is intentionally blocked by an administrator.
-- **unavailable**: The connector is temporarily unhealthy.
+- **deleted**: Access is blocked during soft-delete retention.
+
+Connector health is observed separately as `unknown`, `healthy`, `degraded`, or `unreachable`; health does not silently change administrative lifecycle state.
 
 Query lifecycle:
 

@@ -255,7 +255,9 @@ mda/
 │   └── dashboard-template/   # Fixed build shell; Agent owns src
 ├── skills/
 │   └── dashboard-aesthetics/ # Design guidance, no component restrictions
-├── migrations/               # Ordered PostgreSQL SQL migrations
+├── migrations/
+│   ├── control-plane/        # Main-owned ordered PostgreSQL migrations
+│   └── data-source/          # Data Source-owned ordered PostgreSQL migrations
 ├── docs/
 └── package.json
 ```
@@ -269,15 +271,16 @@ These rules prevent architecture drift without limiting generated dashboard code
 ### 9.1 Dependency Direction
 
 ```text
-HTTP routes / job handlers
-  → domain functions
-  → database and storage functions
+HTTP routes / worker adapters
+  → application handlers
+      → pure domain functions
+      → database, storage, and process-boundary adapters
 ```
 
-- HTTP routes parse input, establish tenant context, authorize, and call domain functions.
-- Domain functions implement lifecycle and transaction rules.
-- Database functions contain SQL.
-- Storage functions contain S3 operations.
+- HTTP routes parse and validate transport input, then establish tenant context.
+- Application handlers authorize, orchestrate transactions, and call domain functions and adapters.
+- Domain functions implement lifecycle invariants without infrastructure dependencies.
+- Database functions contain SQL; storage functions contain S3 operations.
 - Agent Tools call versioned internal APIs; they do not import Control Plane or Data Source Service database or connector code.
 
 Do not add abstract interfaces with one implementation merely to imitate Clean Architecture. Introduce an interface only at a real process, storage, provider, or test boundary.
@@ -320,35 +323,33 @@ The platform does not parse the component tree, choose controls, prescribe chart
 - The Data Source Service never reads Control Plane tables or Dashboard source.
 - Public viewer requests never invoke Pi.
 
-## 10. Control Plane Module Structure
+## 10. Domain Module Structure
 
-Keep the service modular without introducing a framework-heavy layer hierarchy:
+Use pragmatic Domain-Driven Design inside each deployable:
 
 ```text
 apps/control-plane/src/
 ├── server.ts
-├── auth/
-├── dashboards/
-├── revisions/
-├── publications/
-├── data-source-client/
-├── query-bindings/
-├── agent-jobs/
-├── events/
-├── runtime/
-├── audit/
-├── db/
-└── storage/
+├── contexts/
+│   ├── access/
+│   ├── dashboards/
+│   ├── agent-work/
+│   ├── distribution/
+│   └── runtime-delivery/
+├── adapters/
+└── shared/
+
+apps/data-source-service/src/
+├── server.ts
+├── contexts/data-access/
+├── connectors/
+├── adapters/
+└── shared/
 ```
 
-Each domain directory may contain:
+Each context starts with small domain, command, query, PostgreSQL, and route modules as needed. Split files only when actual size or ownership makes the result clearer. Do not begin with repositories, services, factories, and controllers for every table.
 
-- Route definitions.
-- TypeBox schemas specific to the domain.
-- Plain TypeScript domain functions.
-- SQL functions when they remain small.
-
-Split SQL into `db/` only when sharing or file size makes that simpler. Do not begin with repositories, services, factories, and controllers for every table.
+The complete Context Map, aggregate boundaries, transaction rules, events, and target file structure are defined in `docs/domain-driven-design-structure.md`.
 
 ## 11. Metadata Model
 
@@ -360,6 +361,7 @@ users
 memberships
 
 dashboards
+draft_checkpoints
 dashboard_revisions
 publications
 share_links
@@ -370,6 +372,8 @@ agent_sessions
 agent_jobs
 agent_events
 
+control_idempotency_keys
+control_outbox
 audit_events
 ```
 
@@ -912,3 +916,4 @@ The architecture is acceptable when:
 16. `mda-main` and `mda-agent` are separate images with separate credentials, networks, and responsibilities.
 17. Docker Compose starts the complete PostgreSQL, Redis, Object Storage, Data Source, Main, JDBC, and Agent topology.
 18. Control Plane and Data Source Service own separate persistence and communicate only through versioned contracts.
+19. Every authoritative record has one Bounded Context owner, and domain transitions have no infrastructure dependencies.

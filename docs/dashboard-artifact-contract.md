@@ -348,4 +348,5 @@ Complete the following flow using a sample sales data source:
 - `docs/data-source-management-module.md`: Standalone HTTP/JDBC Data Source CRUD and connector ownership.
 - `docs/live-data-and-refresh-contract.md`: Draft checkpoints, live runtime queries, polling, freshness, and sharing modes.
 - `docs/technology-selection-and-architecture.md`: Runtime and security architecture.
+- `docs/domain-driven-design-structure.md`: Bounded Contexts, aggregates, workflows, and code structure.
 - `docs/docker-compose-deployment-architecture.md`: Main, Agent, PostgreSQL, Redis, Object Storage, and connector deployment.

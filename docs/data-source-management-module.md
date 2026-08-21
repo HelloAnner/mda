@@ -34,7 +34,7 @@ The module is deployed as the independent `mda-datasource` image from:
 apps/data-source-service/
 ```
 
-Its Docker Compose placement, networks, PostgreSQL ownership, Redis use, and JDBC sidecar are defined in `docs/docker-compose-deployment-architecture.md`.
+Its Docker Compose placement, networks, PostgreSQL ownership, Redis use, and JDBC sidecar are defined in `docs/docker-compose-deployment-architecture.md`. Its aggregate, transaction, event, and code-module boundaries are defined in `docs/domain-driven-design-structure.md`.
 
 It owns:
 
@@ -405,7 +405,7 @@ POST   /v1/data-sources/{sourceId}/restore
 DELETE /v1/data-sources/{sourceId}/purge
 ```
 
-Restore is permitted during the retention period if required secrets still exist.
+Restore is permitted during the retention period if required secrets still exist. A restored source returns to `disabled`; an administrator must explicitly enable it after verification.
 
 Purge is an administrator-only operation after retention and dependency checks. It permanently removes connector metadata and schedules secret cleanup according to secret-manager policy.
 
@@ -642,7 +642,7 @@ interface QueryRevision {
 }
 ```
 
-The Query Revision stores no resolved secret.
+The Query Revision stores no resolved secret. `sourceConfigRevision` records the configuration used to validate it; runtime execution resolves the Data Source's currently active Config Revision. This allows compatible connection updates and secret rotation without republishing Dashboards. Config activation invalidates affected pools and Query Result caches; incompatible source changes return structured Query errors until a new Query Revision is validated.
 
 Runtime Dashboard Bindings reference:
 
@@ -864,7 +864,9 @@ data_source_schema_revisions
 data_source_health
 query_definitions
 query_revisions
+source_idempotency_keys
 source_events
+source_outbox
 source_audit_events
 ```
 
