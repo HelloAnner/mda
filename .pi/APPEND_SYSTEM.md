@@ -1,11 +1,15 @@
 # Repository Workflow
 
-After completing requested code or documentation changes and running the relevant checks:
+After completing requested code or documentation changes, running the relevant
+checks, and passing the deployment verification required below:
 
 1. Commit only the changes made for the current task with a concise commit message.
 2. Push the current branch to its configured remote automatically.
 3. Do not amend existing commits, rewrite history, or force-push.
 4. If committing or pushing fails, report the error instead of hiding it.
+
+Never push a feature before the newest CLI from the local working tree has
+passed its feature test against the newest deployed environment.
 
 Do not wait for additional confirmation before a normal commit and push.
 
@@ -25,14 +29,25 @@ This repository deploys to a remote server. Follow these rules strictly:
 ## Deploying
 
 - `make deploy` is the single entrypoint: it deploys every Compose service to
-  the server automatically via `rsync` + `docker compose` over SSH. When the
-  server is unreachable it falls back to the full stack on the local computer.
-- Runtime feature verification and debugging happen **on the server**, not in a
-  local substitute when the server is available:
-  1. Implement the feature locally, run `bun run typecheck && bun run lint && bun test`.
-  2. Deploy with `make deploy`.
-  3. Verify and debug the live server stack (`make status`, `make health`,
-     dashboards, and chat).
+  the server automatically via `rsync` + `docker compose` over SSH. Only when
+  the server is unreachable may it fall back to the full local Compose stack.
+- **Never deploy or start a local MDA stack while `moss-dev-2` is reachable.**
+  Do not use `make deploy-local`, `docker compose up`, or any equivalent local
+  deployment as an additional test when the server is available.
+- Every feature follows this release gate:
+  1. Implement the feature on the local computer.
+  2. Run `bun run typecheck && bun run lint && bun test` locally.
+  3. Run `make deploy`; it must update the reachable server rather than local Docker.
+  4. From the local working tree, run the newest CLI with `bun run mda` against
+     the newest server deployment. Do not test with a stale global CLI or a CLI
+     installed on the server.
+  5. Exercise the feature itself through the CLI, not only health checks. Use
+     `make status` and `make health` as supporting checks, then debug failures
+     against the server logs and repeat deployment and CLI testing.
+  6. Commit and push the feature only after the local CLI feature test passes.
+- If `moss-dev-2` is unreachable, and only then, deploy the full stack locally
+  and run the same newest local CLI feature test against that local deployment
+  before committing and pushing.
 - To reach the deployed Control Plane from this computer use an SSH tunnel:
   `ssh -N -L 8356:127.0.0.1:8356 moss-dev-2`, then point the CLI at
   `MDA_API_URL=http://localhost:8356`.
