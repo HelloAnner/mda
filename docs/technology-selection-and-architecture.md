@@ -178,7 +178,7 @@ A React/Vite single-page application that provides:
 - Validation and publishing controls.
 - Share-link administration.
 
-The production build is static and may be served by the Control Plane or a CDN. It contains no database credentials, model credentials, or data-source credentials.
+The production management build is a static frontend artifact and may be served by the Control Plane or a CDN. Published Dashboard bundles are also immutable frontend artifacts, but their authorized data remains live through the Data Gateway. No frontend artifact contains database, model, or data-source credentials.
 
 ### 7.2 mda CLI
 
@@ -528,9 +528,10 @@ When an Agent settles:
 1. Flush the Session JSONL.
 2. Upload it to Object Storage.
 3. Record its object key and Pi session ID.
-4. Snapshot the workspace when a Revision is saved.
-5. Dispose the `AgentSession`.
-6. Exit the Runner.
+4. Save a recoverable Draft Checkpoint when files changed.
+5. Promote the checkpoint to an immutable Dashboard Revision only on explicit save or publish preparation.
+6. Dispose the `AgentSession`.
+7. Exit the Runner.
 
 A resumed Job restores the previous source snapshot and Session before prompting.
 
@@ -580,7 +581,7 @@ The iframe receives no permanent token. For data queries:
 4. The Control Plane validates the Preview Revision and Query Binding.
 5. The result returns through the host to the iframe.
 
-The preview origin uses a strict CSP and allows network access only where the Runtime implementation requires it.
+The preview origin uses a strict CSP and allows network access only where the Runtime implementation requires it. Preview queries use live data by default; changing source rows appears on the next query or watcher refresh without rebuilding the Preview bundle.
 
 ## 17. Publishing Architecture
 
@@ -608,7 +609,7 @@ A Publication records:
 - Publisher and timestamp.
 - Validation result.
 
-A share link points to a Publication, not to the current Draft.
+A share link points to a Publication, not to the current Draft. The Publication pins code and Query Revisions, but each authorized runtime execution reads current source data. Data refresh never creates a new Publication.
 
 ## 18. Runtime Data Architecture
 
@@ -616,17 +617,21 @@ The Data Gateway remains presentation-neutral:
 
 ```text
 Generated src
-  → dashboard.query(logicalName, parameters)
+  → dashboard.query() or dashboard.watch()
   → Viewer Host
   → Control Plane Runtime endpoint
-  → authorized Query Revision
-  → read-only data source
-  → structured rows and metadata
+  → authorization and pinned Query Revision
+  → read-only live data source
+  → rows, freshness metadata, and structured errors
 ```
 
-It returns data, column metadata, truncation state, and structured errors. It never returns component, chart, control, or layout instructions.
+`dashboard.query()` performs a one-time request. `dashboard.watch()` provides polling-based automatic refresh with cancellation, no-overlap behavior, visibility pause, focus refresh, and bounded retry.
 
-The Coding Agent decides how every result is presented and how every control behaves.
+The Control Plane enforces minimum refresh intervals, query concurrency, timeout, result size, and cache isolation. Authorization is repeated for every manual or automatic refresh.
+
+It returns data, column metadata, freshness, cache and truncation state, and structured errors. It never returns component, chart, control, or layout instructions.
+
+The Coding Agent decides which data refreshes, the requested interval, how every result is presented, and how loading, refreshing, stale, and failure states behave. The complete contract is defined in `docs/live-data-and-refresh-contract.md`.
 
 ## 19. Authentication and Tenant Isolation
 
@@ -711,6 +716,7 @@ Initial metrics:
 - Model token usage and cost.
 - Build duration and failure count.
 - Query duration, timeout count, and row count.
+- Automatic refresh count, throttling, retry, and cache-hit ratio.
 - SSE connection count.
 
 Add a full OpenTelemetry pipeline only when there is an actual collector and operational need. Structured logs and database audit records are sufficient for the first deployment.
@@ -780,7 +786,9 @@ Use Playwright for:
 - OIDC-authenticated management flow using a test issuer or fixture.
 - Chat event rendering and SSE reconnection.
 - Preview iframe isolation.
-- Runtime query bridge.
+- Runtime query and watcher bridge.
+- Source-row updates appearing without Preview or Publication rebuilds.
+- Visibility pause, focus refresh, and access revocation between refreshes.
 - Dashboard build rendering.
 - Publishing and fixed-revision share links.
 - CSP and prohibited-network checks.
@@ -863,6 +871,7 @@ The Data Gateway becomes a separate service only if source network placement, qu
 3. Add Agent exploration and query registration Tools.
 4. Bind a Query Revision to a Dashboard Revision.
 5. Execute it through `dashboard.query()`.
+6. Add polling-based `dashboard.watch()` and verify source-row changes appear without rebuilding.
 
 ### Phase 4: Publish and Share
 
@@ -870,7 +879,7 @@ The Data Gateway becomes a separate service only if source network placement, qu
 2. Validate from a clean snapshot.
 3. Publish immutable build artifacts.
 4. Add authenticated share links.
-5. Add public snapshot or explicitly public-query sharing.
+5. Add authenticated live sharing, explicitly approved public-live queries, and clearly labeled optional snapshots.
 
 ### Phase 5: Hardening
 
@@ -898,3 +907,4 @@ The architecture is acceptable when:
 12. The Coding Agent retains full control over `src/**` and `public/**`.
 13. The system operates without Redis, Kafka, Kubernetes, an ORM, or a low-code DSL in the first version.
 14. The `mda` CLI reaches feature parity through the same Control Plane API and stable event contracts used by the web client.
+15. Published Dashboards refresh current authorized data without invoking Pi, rebuilding, or creating source Revisions.

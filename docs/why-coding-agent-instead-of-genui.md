@@ -400,7 +400,7 @@ MDA provides a small set of capabilities around the Coding Agent.
 - Factual schema descriptions.
 - Safe design-time exploration.
 - Agent-authored registered queries.
-- Runtime `dashboard.query()` access.
+- Live Runtime `dashboard.query()` and polling-based `dashboard.watch()` access.
 - Structured rows, metadata, and errors.
 
 ### 7.3 Operation

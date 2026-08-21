@@ -21,8 +21,9 @@ The Data Gateway is responsible only for:
 - Executing authorized read-only exploration queries.
 - Saving Agent-authored queries as immutable revisions.
 - Executing published queries with validated parameters.
-- Enforcing credentials, permissions, timeouts, and result limits.
-- Returning structured data and structured errors.
+- Serving current source data to one-time and automatically refreshed runtime queries.
+- Enforcing credentials, permissions, refresh rates, timeouts, and result limits.
+- Returning structured data, freshness metadata, and structured errors.
 - Auditing data access.
 
 ### 2.2 Coding Agent
@@ -100,7 +101,14 @@ interface DataSourceDescription {
   description?: string;
   kind: "postgres";
   schemaRevision: number;
+  runtime: DataSourceRuntimeCapabilities;
   entities: DataEntity[];
+}
+
+interface DataSourceRuntimeCapabilities {
+  live: boolean;
+  modes: Array<"query" | "poll">;
+  minRefreshIntervalMs: number;
 }
 
 interface DataEntity {
@@ -203,6 +211,7 @@ interface QueryDefinition {
   statement: string;
   parameters: QueryParameterDefinition[];
   result: QueryResultSchema;
+  runtimePolicy: QueryRuntimePolicy;
   status: "validated" | "active" | "retired";
 }
 
@@ -229,6 +238,16 @@ interface QueryResultColumn {
   name: string;
   type: DataType;
   nullable: boolean;
+}
+
+interface QueryRuntimePolicy {
+  live: boolean;
+  supportsPolling: boolean;
+  minRefreshIntervalMs: number;
+  defaultCacheTtlMs: number;
+  maxExecutionTimeMs: number;
+  maxRows: number;
+  maxResponseBytes: number;
 }
 ```
 
@@ -280,11 +299,20 @@ The Runtime resolves the logical name through the current dashboard revision's v
 
 ## 10. Runtime Query Contract
 
-The generated dashboard calls the stable Runtime API:
+The generated dashboard calls the stable Runtime API for a one-time query or creates a polling watcher:
 
 ```ts
 const result = await dashboard.query<T>(queryId, parameters);
+
+const watcher = dashboard.watch<T>(
+  queryId,
+  () => parameters,
+  { intervalMs: 30_000, pauseWhenHidden: true },
+  handleQueryEvent
+);
 ```
+
+The complete watcher behavior is defined in `docs/live-data-and-refresh-contract.md`.
 
 Conceptual gateway request:
 
@@ -293,6 +321,8 @@ interface RuntimeQueryRequest {
   dashboardRevisionId: string;
   queryId: string;
   parameters: Record<string, QueryParameterValue>;
+  freshness: "allow-cache" | "live";
+  refreshReason: "initial" | "interval" | "focus" | "manual" | "parameters";
 }
 
 type QueryParameterValue = string | number | boolean | null;
@@ -320,6 +350,13 @@ interface QueryResult<T extends Record<string, unknown> = Record<string, unknown
     rowCount: number;
     truncated: boolean;
     durationMs: number;
+    fetchedAt: string;
+    sourceUpdatedAt?: string;
+    cache: {
+      hit: boolean;
+      storedAt?: string;
+      expiresAt?: string;
+    };
   };
 }
 ```
@@ -341,7 +378,12 @@ Example:
     ],
     "rowCount": 1,
     "truncated": false,
-    "durationMs": 24
+    "durationMs": 24,
+    "fetchedAt": "2026-08-21T12:00:00Z",
+    "sourceUpdatedAt": "2026-08-21T11:59:52Z",
+    "cache": {
+      "hit": false
+    }
   }
 }
 ```
@@ -354,7 +396,7 @@ Serialization rules:
 - SQL `NULL` becomes JSON `null`.
 - Column order follows the query result.
 
-The Agent decides whether the result becomes a chart, table, KPI, custom Canvas rendering, filter source, or any other interface.
+The Agent decides whether the result becomes a chart, table, KPI, custom Canvas rendering, filter source, or any other interface. `sourceUpdatedAt` is omitted when the source cannot provide it accurately.
 
 ## 12. Parameters and Controls
 
@@ -411,12 +453,12 @@ Every operation must validate:
 5. The viewer may execute the query in the current sharing mode.
 6. Trusted row-level context is applied when required.
 
-Anonymous sharing may use only:
+Authenticated Publications use live data by default. Anonymous sharing may use only:
 
-- Snapshot data; or
-- Queries explicitly approved for public execution.
+- Queries explicitly approved for public live execution; or
+- An explicitly selected and clearly labeled snapshot.
 
-An anonymous viewer never inherits the creator's credentials or permissions.
+An anonymous viewer never inherits the creator's credentials or permissions. Snapshot mode is an alternative, not the default definition of a published Dashboard.
 
 ## 15. Reliability and Limits
 
@@ -430,11 +472,16 @@ Every data source connector must support:
 - A finite statement timeout.
 - A finite row limit.
 - A finite response-size limit.
-- Structured error responses.
+- An enforced minimum refresh interval.
+- Authorization on every automatic or manual refresh.
+- No overlapping execution for one runtime watcher.
+- Structured freshness and error responses.
 
 Limits are platform policy and may vary by environment. They must not be controlled by browser input or Agent-generated source.
 
 When a result is truncated, the response must set `meta.truncated` to `true`. The Coding Agent should respond by aggregating or narrowing the query rather than assuming the data is complete.
+
+Runtime caching, when enabled, must use a finite TTL and a cache key that includes tenant, viewer authorization scope, Query Revision, normalized parameters, and trusted row-level context. Refresh requests cannot bypass server policy.
 
 ## 16. Error Contract
 
@@ -515,8 +562,10 @@ The first version includes:
 - Immutable query revisions.
 - Typed parameters.
 - Tabular JSON results.
-- Authenticated runtime execution.
-- Explicitly approved public queries or snapshots for anonymous sharing.
+- Authenticated live runtime execution.
+- Polling-based automatic refresh through the Dashboard Runtime.
+- Minimum refresh intervals, cancellation, and freshness metadata.
+- Explicitly approved public-live queries or clearly labeled snapshots for anonymous sharing.
 - Structured errors and audit records.
 
 The first version does not include:
@@ -540,13 +589,15 @@ The contract is satisfied when:
 4. The Agent can register and test its own query.
 5. Publishing pins an immutable query revision.
 6. A published dashboard executes only its authorized query bindings.
-7. The browser receives no SQL or data-source credentials.
-8. Query parameters are validated and bound safely.
-9. Tenant and viewer context cannot be overridden by the browser.
-10. Source failures return structured, sanitized errors.
-11. `src/` may render the same result using any components or interactions.
-12. Changing a filter, chart, layout, or component requires only Coding Agent changes to `src/`, not changes to the Data Gateway contract.
-13. A dashboard aesthetics Skill may guide quality without imposing a component schema.
+7. A published dashboard receives current source data without invoking Pi or rebuilding its frontend bundle.
+8. Automatic refresh repeats authorization and respects the enforced minimum interval.
+9. The browser receives no SQL or data-source credentials.
+10. Query parameters are validated and bound safely.
+11. Tenant and viewer context cannot be overridden by the browser.
+12. Source failures return structured, sanitized errors and preserve freshness context.
+13. `src/` may render the same result using any components or interactions.
+14. Changing a filter, chart, layout, or component requires only Coding Agent changes to `src/`, not changes to the Data Gateway contract.
+15. A dashboard aesthetics Skill may guide quality without imposing a component schema.
 
 ## 21. Next Design
 
@@ -561,4 +612,4 @@ After this contract, define the Pi Agent Tool Contract that implements:
 - `build_preview`.
 - `publish_dashboard`.
 
-Those Tools must expose the capabilities defined here without taking control of dashboard components away from the Coding Agent.
+Those Tools must expose the capabilities defined here without taking control of dashboard components away from the Coding Agent. Runtime saving and refresh behavior is defined in `docs/live-data-and-refresh-contract.md`; automatic refresh never invokes an Agent Tool.

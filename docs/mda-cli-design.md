@@ -582,6 +582,8 @@ Exports exclude:
 
 When `--verify` is used, the CLI validates the server-provided checksum after download.
 
+A bundle export contains the immutable frontend artifact and Query Binding metadata, not frozen query results. Live data still comes from an authorized MDA Runtime and Data Gateway unless the user explicitly requests a clearly labeled snapshot export mode.
+
 ## 15. Revision Commands
 
 ```bash
@@ -624,7 +626,7 @@ mda share show share_123
 mda share revoke share_123
 ```
 
-A public share requires snapshot data or explicitly approved public Query Revisions. The CLI cannot override server policy.
+Authenticated shares use live data by default. A public-live share requires explicitly approved public Query Revisions; a snapshot is an explicit, clearly labeled alternative. The CLI cannot override server policy.
 
 ## 17. Continuous Conversation
 

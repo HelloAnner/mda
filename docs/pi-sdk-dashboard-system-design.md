@@ -72,10 +72,10 @@ The lower-level minimal Agent runtime is `pi-agent-core`. This system should not
 The access path after publishing is:
 
 ```text
-Viewer → Published static dashboard → Data Gateway → Data source
+Viewer → Immutable published frontend bundle → Data Gateway → Live data source
 ```
 
-Pi participates only in dashboard design and modification. Viewing a published dashboard should not invoke Pi again, because doing so would increase latency, cost, and instability.
+Pi participates only in dashboard design and modification. Viewing or automatically refreshing a published dashboard does not invoke Pi. The frontend bundle is immutable, but its authorized runtime queries return current source data through the Data Gateway.
 
 ## 4. Agent Worker
 
@@ -93,7 +93,7 @@ The Worker is responsible for:
 4. Forwarding events to the management UI through SSE or WebSocket.
 5. Generating and modifying dashboard source code in the workspace.
 6. Calling controlled tools for data queries, builds, previews, and publishing.
-7. Saving Session and workspace state when a job finishes.
+7. Saving Session state and an automatic Draft Checkpoint when a file-changing job finishes.
 
 An `AgentSession` must not be shared across tenants or dashboards. Concurrent modifications to the same dashboard should be serialized to prevent simultaneous writes to one workspace.
 
@@ -157,6 +157,8 @@ Skills guide the Agent on:
 - Loading, empty-data, and error states.
 - Prohibiting secrets in frontend code.
 - Requiring builds and previews after modifications.
+- Using `dashboard.watch()` for data expected to change while a page remains open, unless the user requests manual refresh.
+- Presenting refreshing, stale, and failure states clearly without requiring specific components.
 - Using the system-provided data-source tools.
 
 Skills are model instructions, not security boundaries. A model may misunderstand or violate a Skill, so security requirements cannot rely on Skills alone.
@@ -207,7 +209,7 @@ Data tools and the Data Gateway must enforce:
 Separate two types of queries:
 
 1. **Design-time exploratory queries**: The Agent uses `query_data_source` to inspect schemas and sample data while generating a dashboard.
-2. **Runtime registered queries**: Publishing stores validated query definitions. The dashboard frontend submits only a Query ID and allowed parameters, never arbitrary SQL.
+2. **Runtime registered queries**: Publishing pins validated Query Revisions. The dashboard frontend submits only a Query ID and allowed parameters, never arbitrary SQL. One-time queries and automatic polling return current source data without an Agent Job.
 
 This preserves flexibility during generation while preventing published pages from executing arbitrary database queries.
 
@@ -226,22 +228,25 @@ Recommended lifecycle:
 
 ```text
 Conversation-driven changes
-  → Draft workspace
-  → Save Revision
+  → Autosave Draft Checkpoint
+  → Save immutable Revision
   → Build and validate
-  → Publish immutable revision
-  → Share link points to that revision
+  → Publish immutable frontend artifact with Query Bindings
+  → Runtime queries continue reading live data
 ```
 
 Saving and publishing should be separate:
 
-- **Save**: Record the current draft revision and allow further edits.
-- **Publish**: Build and validate an immutable artifact.
+- **Autosave**: Store a recoverable Draft Checkpoint after a successful file-changing Agent Job.
+- **Save**: Promote the current Draft into an immutable source Revision while allowing later Draft edits.
+- **Publish**: Build and validate an immutable frontend artifact with pinned Query Revision bindings.
 - **Share**: Configure an ACL or sharing token for a published revision.
+
+Saving and publishing do not freeze ordinary query results. Runtime refresh does not create source Revisions.
 
 Pi's built-in Session sharing shares a conversation, not a business dashboard, so it cannot replace dashboard sharing in the management system.
 
-Public sharing should default to data snapshots or explicitly public datasets. Anonymous share links must not inherit the dashboard creator's database permissions.
+Authenticated Publications use live data by default. Anonymous live sharing requires Query Revisions explicitly approved for public execution. Snapshot sharing remains an explicit, clearly labeled alternative; anonymous viewers never inherit the creator's database permissions.
 
 ## 9. Security Boundaries
 
@@ -321,6 +326,7 @@ The first version should implement only:
 6. Three core hard-boundary tools: `validate_dashboard`, `build_preview`, and `publish_dashboard`.
 7. Immutable revisions and read-only share links.
 8. An independent Workspace, Session, and serial job lock for each dashboard.
+9. Live runtime queries and polling-based automatic refresh without invoking Pi.
 
 The first version should not implement:
 
