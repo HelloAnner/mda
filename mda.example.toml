@@ -1,0 +1,24 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+access_password_env = "MDA_ACCESS_PASSWORD"
+# HTTP is suitable only for localhost/private networks or behind an HTTPS proxy.
+
+[database]
+url_env = "DATABASE_URL"
+
+[oidc]
+issuer = "https://identity.example"
+audience = "mda"
+jwks_url = "https://identity.example/.well-known/jwks.json"
+
+[agent]
+lease_ms = 30000
+internal_token_env = "INTERNAL_AGENT_TOKEN"
+
+[agent.model]
+provider = "openai-compatible"
+model = "your-model-id"
+base_url = "https://api.example/v1"
+api_key_env = "MDA_MODEL_API_KEY"
+# Use api_key_file = "/run/secrets/model_api_key" instead in Compose.

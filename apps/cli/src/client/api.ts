@@ -5,6 +5,7 @@ export interface ApiClientConfig {
   apiUrl: string;
   tenant?: string;
   token?: string;
+  accessPassword?: string;
   version: string;
 }
 
@@ -27,6 +28,9 @@ export async function apiRequest(
   headers.set("x-mda-contract-version", "1");
   if (config.tenant) headers.set("x-mda-tenant", config.tenant);
   if (config.token) headers.set("authorization", `Bearer ${config.token}`);
+  if (config.accessPassword) {
+    headers.set("x-mda-access-password", config.accessPassword);
+  }
   if (init.body) headers.set("content-type", "application/json");
 
   const response = await fetch(new URL(path, config.apiUrl), {

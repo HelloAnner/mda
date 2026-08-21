@@ -41,6 +41,24 @@ This file tracks implementation status. The detailed contracts and architecture 
 - [x] Add `mda dashboard create`, `list`, and `show` commands.
 - [x] Add a PostgreSQL integration check for idempotency, constraints, auditing, outbox records, and tenant isolation.
 
+### Deployment and Agent configuration
+
+- [x] Add deployment-wide `mda.toml` host, port, OIDC, database, Agent lease, and model configuration.
+- [x] Keep access passwords, internal tokens, and model API keys in environment/file references rather than TOML plaintext.
+- [x] Add a deployment access-password gate for public APIs and CLI forwarding.
+- [x] Allow HTTP model and application endpoints for local/private deployments; require an HTTPS proxy for public Internet access.
+- [x] Add the Agent-owned loader for model provider, model ID, base URL, and API key resolution.
+
+### Agent Job authority
+
+- [x] Add versioned Agent Session, Agent Job, claim, lease, and settlement contracts.
+- [x] Add Agent Session and Agent Job migrations and active-Session constraints.
+- [x] Implement pure claim, start, heartbeat, settlement, cancellation, fencing, and expired-lease recovery transitions.
+- [x] Persist idempotent Agent Job creation with audit and transactional outbox records.
+- [x] Add authenticated message submission and Job read/cancel APIs.
+- [x] Add internal claim, start, heartbeat, and settlement APIs with service-token authentication.
+- [x] Verify stale fencing-token rejection through PostgreSQL integration tests.
+
 ## Next
 
 Continue the authoritative authoring and Agent Job path:
@@ -48,11 +66,11 @@ Continue the authoritative authoring and Agent Job path:
 - [ ] Add Data Source Service PostgreSQL migrations and its separate database role.
 - [ ] Add the Draft Checkpoint and Dashboard Revision contracts and migrations.
 - [ ] Implement immutable source artifact references and Query Bindings.
-- [ ] Add Agent Session and Agent Job contracts.
-- [ ] Implement the Agent Job lease and fencing-token domain transitions.
-- [ ] Persist Agent Job creation with idempotency and a transactional outbox event.
-- [ ] Dispatch queued Agent Jobs through Redis Streams.
-- [ ] Add durable Agent Event append and SSE replay.
+- [ ] Dispatch queued Agent Jobs from the PostgreSQL outbox through Redis Streams.
+- [ ] Add a Redis consumer and minimal independent Agent worker loop.
+- [ ] Add persisted Agent Event append, terminal transitions, and SSE replay.
+- [ ] Add the expired-lease recovery sweep and Redis pending-entry reclaim.
+- [ ] Connect the Agent worker to Pi using the model settings from `mda.toml`.
 
 ## Not Done
 
@@ -60,9 +78,9 @@ Continue the authoritative authoring and Agent Job path:
 
 - [ ] Management Web workspace and React/Vite application.
 - [ ] Data Source Service workspace and runnable service.
-- [ ] Agent workspace and runnable worker.
+- [ ] Runnable Agent worker and image; the Agent configuration workspace now exists.
 - [ ] Dashboard Runtime and Dashboard Template packages.
-- [ ] Versioned Dashboard, Session, Job, Agent Event, Data Access, Runtime, and integration-event contracts.
+- [ ] Remaining Dashboard Revision, Agent Event, Data Access, Runtime, and integration-event contracts.
 - [ ] OIDC login flows and tenant/role administration beyond token and membership validation.
 - [ ] Production secret-file loading.
 - [ ] Remaining PostgreSQL schemas, migrations, constraints, and separate service roles.
@@ -77,7 +95,7 @@ Continue the authoritative authoring and Agent Job path:
 - [ ] Draft Checkpoints and immutable Dashboard Revisions.
 - [ ] Query Bindings owned by Dashboard Revisions.
 - [ ] Agent Sessions and resumable Pi Session artifacts.
-- [ ] Agent Job state machine, leases, fencing tokens, cancellation, and recovery.
+- [ ] Persisted expired-lease recovery, cancellation wake-ups, and Redis reclaim.
 - [ ] Durable ordered Agent Events and SSE replay.
 - [ ] Independent Redis-consuming `mda-agent` image.
 - [ ] Pi SDK integration pinned to the reviewed version.
@@ -132,6 +150,7 @@ Continue the authoritative authoring and Agent Job path:
 ## Current Commands
 
 ```bash
+cp mda.example.toml mda.toml
 bun install
 bun run db:migrate
 bun run typecheck

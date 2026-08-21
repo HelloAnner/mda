@@ -7,8 +7,13 @@ import {
 import type { SQL } from "bun";
 import packageJson from "../package.json" with { type: "json" };
 import { loadConfig } from "./config.ts";
+import { handleAgentWorkRequest } from "./contexts/agent-work/routes.ts";
 import { handleDashboardRequest } from "./contexts/dashboards/routes.ts";
-import { createAuthenticator, type PrincipalContext } from "./shared/auth.ts";
+import {
+  authorizeGlobalAccess,
+  createAuthenticator,
+  type PrincipalContext,
+} from "./shared/auth.ts";
 import { createDatabase } from "./shared/db.ts";
 import { errorResponse, HttpError } from "./shared/http.ts";
 
@@ -27,6 +32,9 @@ const metadata: ServiceMetadata = {
 interface ServerDependencies {
   db: SQL;
   authenticate(request: Request): Promise<PrincipalContext>;
+  internalAgentToken?: string;
+  agentLeaseMs?: number;
+  accessPassword?: string;
 }
 
 export function startServer(
@@ -63,8 +71,29 @@ export function startServer(
     },
     async fetch(request) {
       if (dependencies) {
-        const response = await handleDashboardRequest(request, dependencies);
-        if (response) return response;
+        if (
+          dependencies.accessPassword &&
+          new URL(request.url).pathname.startsWith("/api/")
+        ) {
+          try {
+            authorizeGlobalAccess(request, dependencies.accessPassword);
+          } catch (error) {
+            return errorResponse(
+              error,
+              request.headers.get("x-request-id") ?? crypto.randomUUID(),
+            );
+          }
+        }
+        const agentResponse = await handleAgentWorkRequest(
+          request,
+          dependencies,
+        );
+        if (agentResponse) return agentResponse;
+        const dashboardResponse = await handleDashboardRequest(
+          request,
+          dependencies,
+        );
+        if (dashboardResponse) return dashboardResponse;
       }
 
       const error: ApiError = {
@@ -84,6 +113,9 @@ if (import.meta.main) {
   const server = startServer(config.port, config.hostname, {
     db,
     authenticate: createAuthenticator(config, db),
+    internalAgentToken: config.internalAgentToken,
+    agentLeaseMs: config.agentLeaseMs,
+    accessPassword: config.accessPassword,
   });
   console.log(
     JSON.stringify({

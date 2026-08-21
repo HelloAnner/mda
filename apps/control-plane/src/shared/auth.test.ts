@@ -1,12 +1,22 @@
 import { expect, test } from "bun:test";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
-import { verifyAccessToken } from "./auth.ts";
+import { authorizeGlobalAccess, verifyAccessToken } from "./auth.ts";
 
 const config = {
   oidcIssuer: "https://identity.example",
   oidcAudience: "mda",
   oidcJwksUrl: "https://identity.example/jwks.json",
 };
+
+test("requires the deployment access password", () => {
+  const request = new Request("http://localhost/api/dashboards", {
+    headers: { "x-mda-access-password": "global-password" },
+  });
+  expect(() => authorizeGlobalAccess(request, "global-password")).not.toThrow();
+  expect(() =>
+    authorizeGlobalAccess(new Request(request.url), "global-password"),
+  ).toThrow("access password");
+});
 
 test("accepts only correctly issued and scoped access tokens", async () => {
   const { privateKey, publicKey } = await generateKeyPair("ES256");

@@ -2,10 +2,14 @@ import {
   CreateDashboardRequestSchema,
   type DashboardListResponse,
 } from "@mda/contracts";
-import { Value } from "@sinclair/typebox/value";
 import type { SQL } from "bun";
 import { type PrincipalContext, requirePermission } from "../../shared/auth.ts";
-import { errorResponse, HttpError } from "../../shared/http.ts";
+import {
+  errorResponse,
+  HttpError,
+  readJson,
+  requireIdempotencyKey,
+} from "../../shared/http.ts";
 import { getDashboard, insertDashboard, listDashboards } from "./postgres.ts";
 
 interface DashboardRouteDependencies {
@@ -31,37 +35,8 @@ export async function handleDashboardRequest(
 
     if (url.pathname === "/api/dashboards" && request.method === "POST") {
       requirePermission(principal, "dashboard.create");
-      const idempotencyKey = request.headers.get("idempotency-key");
-      if (
-        !idempotencyKey ||
-        idempotencyKey.trim().length === 0 ||
-        idempotencyKey.length > 200
-      ) {
-        throw new HttpError(
-          400,
-          "IDEMPOTENCY_KEY_REQUIRED",
-          "A valid Idempotency-Key header is required",
-        );
-      }
-
-      let body: unknown;
-      try {
-        body = await request.json();
-      } catch {
-        throw new HttpError(
-          400,
-          "VALIDATION_ERROR",
-          "Request body must be JSON",
-        );
-      }
-      if (!Value.Check(CreateDashboardRequestSchema, body)) {
-        const errors = [
-          ...Value.Errors(CreateDashboardRequestSchema, body),
-        ].map(({ path, message }) => ({ path, message }));
-        throw new HttpError(400, "VALIDATION_ERROR", "Invalid request", false, {
-          errors,
-        });
-      }
+      const idempotencyKey = requireIdempotencyKey(request);
+      const body = await readJson(request, CreateDashboardRequestSchema);
 
       const result = await insertDashboard(
         dependencies.db,

@@ -1,0 +1,158 @@
+import {
+  AgentLeaseCommandSchema,
+  ClaimAgentJobRequestSchema,
+  CreateAgentJobRequestSchema,
+  SettleAgentJobRequestSchema,
+} from "@mda/contracts";
+import type { SQL } from "bun";
+import {
+  authorizeInternalRequest,
+  type PrincipalContext,
+  requirePermission,
+} from "../../shared/auth.ts";
+import {
+  errorResponse,
+  HttpError,
+  readJson,
+  requireIdempotencyKey,
+} from "../../shared/http.ts";
+import {
+  cancelAgentJob,
+  claimAgentJob,
+  enqueueAgentJob,
+  getAgentJob,
+  heartbeatAgentJob,
+  settleAgentJob,
+  startAgentJob,
+} from "./postgres.ts";
+
+interface AgentWorkRouteDependencies {
+  db: SQL;
+  authenticate(request: Request): Promise<PrincipalContext>;
+  internalAgentToken?: string;
+  agentLeaseMs?: number;
+}
+
+function decodeId(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    throw new HttpError(400, "VALIDATION_ERROR", "Invalid resource ID");
+  }
+}
+
+export async function handleAgentWorkRequest(
+  request: Request,
+  dependencies: AgentWorkRouteDependencies,
+): Promise<Response | undefined> {
+  const url = new URL(request.url);
+  const messageMatch = url.pathname.match(
+    /^\/api\/dashboards\/([^/]+)\/messages$/,
+  );
+  const publicJobMatch = url.pathname.match(
+    /^\/api\/agent-jobs\/([^/]+)(\/cancel)?$/,
+  );
+  const internalMatch = url.pathname.match(
+    /^\/internal\/v1\/agent-jobs\/([^/]+)\/(claim|start|heartbeat|settle)$/,
+  );
+  if (!messageMatch && !publicJobMatch && !internalMatch) return undefined;
+
+  const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
+  try {
+    if (messageMatch) {
+      if (request.method !== "POST") {
+        throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method not allowed");
+      }
+      const principal = await dependencies.authenticate(request);
+      requirePermission(principal, "dashboard.edit");
+      const result = await enqueueAgentJob(
+        dependencies.db,
+        decodeId(messageMatch[1] ?? ""),
+        await readJson(request, CreateAgentJobRequestSchema),
+        principal,
+        requireIdempotencyKey(request),
+        requestId,
+      );
+      return Response.json(result.job, { status: result.created ? 202 : 200 });
+    }
+
+    if (publicJobMatch) {
+      const principal = await dependencies.authenticate(request);
+      const jobId = decodeId(publicJobMatch[1] ?? "");
+      if (publicJobMatch[2] === "/cancel") {
+        if (request.method !== "POST") {
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method not allowed");
+        }
+        requirePermission(principal, "dashboard.edit");
+        return Response.json(
+          await cancelAgentJob(dependencies.db, principal.tenantId, jobId),
+        );
+      }
+      if (request.method !== "GET") {
+        throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method not allowed");
+      }
+      requirePermission(principal, "dashboard.read");
+      const job = await getAgentJob(dependencies.db, principal.tenantId, jobId);
+      if (!job) {
+        throw new HttpError(404, "AGENT_JOB_NOT_FOUND", "Agent Job not found");
+      }
+      return Response.json(job);
+    }
+
+    if (!dependencies.internalAgentToken) {
+      throw new HttpError(
+        503,
+        "SERVICE_UNAVAILABLE",
+        "Internal Agent API is not configured",
+        true,
+      );
+    }
+    authorizeInternalRequest(request, dependencies.internalAgentToken);
+    if (request.method !== "POST") {
+      throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method not allowed");
+    }
+
+    const jobId = decodeId(internalMatch?.[1] ?? "");
+    const action = internalMatch?.[2];
+    const leaseMs = dependencies.agentLeaseMs ?? 30_000;
+    if (action === "claim") {
+      const command = await readJson(request, ClaimAgentJobRequestSchema);
+      return Response.json(
+        await claimAgentJob(dependencies.db, jobId, command.owner, leaseMs),
+      );
+    }
+    if (action === "start") {
+      return Response.json(
+        await startAgentJob(
+          dependencies.db,
+          jobId,
+          await readJson(request, AgentLeaseCommandSchema),
+        ),
+      );
+    }
+    if (action === "heartbeat") {
+      return Response.json(
+        await heartbeatAgentJob(
+          dependencies.db,
+          jobId,
+          await readJson(request, AgentLeaseCommandSchema),
+          leaseMs,
+        ),
+      );
+    }
+    return Response.json(
+      await settleAgentJob(
+        dependencies.db,
+        jobId,
+        await readJson(request, SettleAgentJobRequestSchema),
+      ),
+    );
+  } catch (error) {
+    if (!(error instanceof HttpError)) {
+      console.error(
+        JSON.stringify({ event: "request.failed", error: String(error) }),
+      );
+    }
+    return errorResponse(error, requestId);
+  }
+}

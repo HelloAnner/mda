@@ -37,7 +37,11 @@ test("dashboard create sends tenant auth and renders the result", async () => {
         "Sales Overview",
       ],
       {
-        env: { ...Bun.env, MDA_TOKEN: "access-token" },
+        env: {
+          ...Bun.env,
+          MDA_TOKEN: "access-token",
+          MDA_ACCESS_PASSWORD: "global-password",
+        },
         stderr: "pipe",
         stdout: "pipe",
       },
@@ -50,6 +54,9 @@ test("dashboard create sends tenant auth and renders the result", async () => {
     expect(await new Response(subprocess.stderr).text()).toBe("");
     expect(received?.headers.get("authorization")).toBe("Bearer access-token");
     expect(received?.headers.get("x-mda-tenant")).toBe("tenant_1");
+    expect(received?.headers.get("x-mda-access-password")).toBe(
+      "global-password",
+    );
     expect(received?.headers.get("idempotency-key")).toBeTruthy();
     expect(receivedBody).toEqual({ name: "Sales Overview" });
   } finally {

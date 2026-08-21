@@ -29,6 +29,9 @@ Global options:
   --output <human|json>
   -h, --help
   -V, --version
+
+Environment:
+  MDA_TOKEN, MDA_ACCESS_PASSWORD
 `;
 
 function stringValue(value: unknown): string | undefined {
@@ -129,6 +132,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
     apiUrl,
     tenant: stringValue(parsed.values.tenant) ?? process.env.MDA_TENANT,
     token: process.env.MDA_TOKEN,
+    accessPassword: process.env.MDA_ACCESS_PASSWORD,
     version: packageJson.version,
   };
 

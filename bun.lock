@@ -10,6 +10,13 @@
         "typescript": "7.0.2",
       },
     },
+    "apps/agent": {
+      "name": "@mda/agent",
+      "version": "0.1.0",
+      "dependencies": {
+        "@sinclair/typebox": "0.34.52",
+      },
+    },
     "apps/cli": {
       "name": "@mda/cli",
       "version": "0.1.0",
@@ -56,6 +63,8 @@
     "@biomejs/cli-win32-arm64": ["@biomejs/cli-win32-arm64@2.5.9", "https://mirrors.cloud.tencent.com/npm/@biomejs/cli-win32-arm64/-/cli-win32-arm64-2.5.9.tgz", { "os": "win32", "cpu": "arm64" }, "sha512-nHK+/HHC+D0ogAHUxomgoSTdjImb6fmNNVTKmf0tyu4eDL1DqPKIHc+i+UL8+b0RnAu8224qo8F2tCVnaT0A3w=="],
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.5.9", "https://mirrors.cloud.tencent.com/npm/@biomejs/cli-win32-x64/-/cli-win32-x64-2.5.9.tgz", { "os": "win32", "cpu": "x64" }, "sha512-Yiq0H56LjXSSw/hd9YkXgSLQfzyDJzbzU2TezozxyNw+uKWAqOtqGVvBfzKRRDiaFF5avGAhHdWKx7LtDOShUw=="],
+
+    "@mda/agent": ["@mda/agent@workspace:apps/agent"],
 
     "@mda/cli": ["@mda/cli@workspace:apps/cli"],
 

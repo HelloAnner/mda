@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { SQL } from "bun";
 import { createRemoteJWKSet, type JWTVerifyGetKey, jwtVerify } from "jose";
 import type { Config } from "../config.ts";
@@ -73,6 +74,46 @@ export function createAuthenticator(
 
     return { tenantId, userId: row.user_id, permissions: row.permissions };
   };
+}
+
+function secretMatches(supplied: string, expected: string): boolean {
+  const suppliedBytes = Buffer.from(supplied);
+  const expectedBytes = Buffer.from(expected);
+  return (
+    suppliedBytes.length === expectedBytes.length &&
+    timingSafeEqual(suppliedBytes, expectedBytes)
+  );
+}
+
+export function authorizeGlobalAccess(
+  request: Request,
+  expectedPassword: string,
+): void {
+  if (
+    !secretMatches(
+      request.headers.get("x-mda-access-password") ?? "",
+      expectedPassword,
+    )
+  ) {
+    throw new HttpError(
+      401,
+      "ACCESS_PASSWORD_REQUIRED",
+      "Valid deployment access password required",
+    );
+  }
+}
+
+export function authorizeInternalRequest(
+  request: Request,
+  expectedToken: string,
+): void {
+  const authorization = request.headers.get("authorization");
+  const supplied = authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : "";
+  if (!secretMatches(supplied, expectedToken)) {
+    throw new HttpError(401, "UNAUTHENTICATED", "Invalid internal token");
+  }
 }
 
 export function requirePermission(

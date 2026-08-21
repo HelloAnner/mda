@@ -1,6 +1,7 @@
 import type { CreateDashboardRequest, Dashboard } from "@mda/contracts";
 import type { SQL } from "bun";
 import { HttpError } from "../../shared/http.ts";
+import { claimIdempotency, requestDigest } from "../../shared/idempotency.ts";
 import { createDashboard } from "./domain.ts";
 
 const operation = "dashboard.create";
@@ -33,44 +34,24 @@ export async function insertDashboard(
     principal.tenantId,
     principal.userId,
   );
-  const requestDigest = new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify(input))
-    .digest("hex");
+  const digest = requestDigest(input);
 
   try {
     return await db.begin(async (transaction) => {
-      const claimed = await transaction`
-        INSERT INTO control_idempotency_keys (
-          tenant_id, operation, key, request_digest, result_id
-        ) VALUES (
-          ${principal.tenantId}, ${operation}, ${idempotencyKey},
-          ${requestDigest}, ${dashboard.id}
-        )
-        ON CONFLICT DO NOTHING
-        RETURNING result_id
-      `;
+      const existingResultId = await claimIdempotency(transaction, {
+        tenantId: principal.tenantId,
+        operation,
+        key: idempotencyKey,
+        requestDigest: digest,
+        resultId: dashboard.id,
+      });
 
-      if (claimed.length === 0) {
-        const existingKeys = await transaction`
-          SELECT request_digest, result_id
-          FROM control_idempotency_keys
-          WHERE tenant_id = ${principal.tenantId}
-            AND operation = ${operation}
-            AND key = ${idempotencyKey}
-        `;
-        const existingKey = existingKeys[0] as Row | undefined;
-        if (!existingKey || existingKey.request_digest !== requestDigest) {
-          throw new HttpError(
-            409,
-            "IDEMPOTENCY_CONFLICT",
-            "Idempotency key was already used for another request",
-          );
-        }
+      if (existingResultId) {
         const existingDashboards = await transaction`
           SELECT id, name, description, status, version, created_at, updated_at
           FROM dashboards
           WHERE tenant_id = ${principal.tenantId}
-            AND id = ${String(existingKey.result_id)}
+            AND id = ${existingResultId}
         `;
         const existingDashboard = existingDashboards[0] as Row | undefined;
         if (!existingDashboard)

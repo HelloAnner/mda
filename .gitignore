@@ -4,4 +4,5 @@ coverage/
 .env
 .env.*
 !.env.example
+mda.toml
 .DS_Store
