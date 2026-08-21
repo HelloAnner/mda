@@ -63,11 +63,11 @@ It is written in TypeScript and executed or compiled with Bun.
 │ MDA Control Plane                          │
 │ Auth, dashboards, sessions, jobs, data,    │
 │ revisions, publish, share, audit           │
-└─────────────┬───────────────────┬──────────┘
-              │                   │
-        PostgreSQL           Object Storage
-              │
-       Agent Controller → Agent Runner → Pi SDK
+└─────────────────────┬──────────────────────┘
+                      ├─ PostgreSQL
+                      ├─ Object Storage
+                      ├─ standalone Data Source Service → HTTP APIs / JDBC
+                      └─ Redis Job Stream → independent mda-agent image → Pi SDK
 ```
 
 The CLI may download source and published artifacts, but it never bypasses the Control Plane to retrieve them.
@@ -299,6 +299,7 @@ mda
 │   ├── list
 │   ├── add
 │   ├── show
+│   ├── rename
 │   ├── update
 │   ├── rotate-secret
 │   ├── describe
@@ -306,7 +307,7 @@ mda
 │   ├── refresh
 │   ├── enable
 │   ├── disable
-│   └── remove
+│   └── delete
 ├── query
 │   ├── list
 │   ├── show
@@ -972,7 +973,8 @@ mda source describe sales-prod
 ### 20.2 Add
 
 ```bash
-mda source add postgres --name sales-prod --host db.example.com --database sales
+mda source add http --name customer-api --config customer-api.json
+mda source add jdbc --name sales-prod --config sales-jdbc.json
 ```
 
 Secrets are entered through a hidden terminal prompt or supplied through a secure secret reference. Password flags are not supported because they leak through shell history and process listings.
@@ -980,33 +982,33 @@ Secrets are entered through a hidden terminal prompt or supplied through a secur
 Non-interactive automation uses a secret-manager reference:
 
 ```bash
-mda source add postgres \
+mda source add jdbc \
   --name sales-prod \
-  --host db.example.com \
-  --database sales \
+  --config sales-jdbc.json \
   --secret-ref secret://mda/sales-prod
 ```
 
-### 20.3 Test and Refresh
+### 20.3 Rename, Update, Test, and Refresh
 
 ```bash
-mda source update sales-prod --description "Production sales reporting"
-mda source rotate-secret sales-prod --secret-ref secret://mda/sales-prod-v2
-mda source test sales-prod
-mda source refresh sales-prod
+mda source rename sales-prod production-sales
+mda source update production-sales --description "Production sales reporting"
+mda source rotate-secret production-sales --secret-ref secret://mda/sales-prod-v2
+mda source test production-sales
+mda source refresh production-sales
 ```
 
 `test` validates connectivity and read-only behavior. `refresh` creates a new source Schema Revision after successful introspection.
 
-### 20.4 State and Removal
+### 20.4 State and Deletion
 
 ```bash
-mda source disable sales-prod
-mda source enable sales-prod
-mda source remove sales-prod --yes
+mda source disable production-sales
+mda source enable production-sales
+mda source delete production-sales --yes
 ```
 
-Removal is blocked while retained Publications depend on the source unless platform retention policy allows it.
+Delete is soft during the retention period and is blocked while retained Publications or Query policy require the source. Rename and edit preserve the stable Data Source ID.
 
 ## 21. Query Commands
 

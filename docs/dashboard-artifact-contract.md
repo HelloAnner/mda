@@ -345,5 +345,7 @@ Complete the following flow using a sample sales data source:
 ## 14. Related Contracts
 
 - `docs/data-gateway-query-contract.md`: Data Source and Query definitions.
+- `docs/data-source-management-module.md`: Standalone HTTP/JDBC Data Source CRUD and connector ownership.
 - `docs/live-data-and-refresh-contract.md`: Draft checkpoints, live runtime queries, polling, freshness, and sharing modes.
-- `docs/technology-selection-and-architecture.md`: Runtime deployment and security architecture.
+- `docs/technology-selection-and-architecture.md`: Runtime and security architecture.
+- `docs/docker-compose-deployment-architecture.md`: Main, Agent, PostgreSQL, Redis, Object Storage, and connector deployment.

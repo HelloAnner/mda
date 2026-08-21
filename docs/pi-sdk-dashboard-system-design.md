@@ -8,7 +8,7 @@ The system should define clear responsibilities:
 
 - **Pi Coding Agent**: Generates, modifies, builds, and validates dashboard code through conversation.
 - **Management system**: Manages users, tenants, data sources, dashboard metadata, versions, publishing, sharing, and permissions.
-- **Dashboard runtime**: Displays published dashboards and queries data through a controlled data gateway.
+- **Dashboard runtime**: Displays published dashboards and queries data through the standalone Data Source Service.
 
 Pi should not simultaneously act as the database, permission system, dashboard hosting platform, and online query runtime.
 
@@ -64,18 +64,20 @@ The lower-level minimal Agent runtime is `pi-agent-core`. This system should not
 │ Generate / build / validate / submit       │
 └────────────┬────────────────────┬─────────┘
              │                    │
-   Source/build artifacts     Data Gateway
+   Source/build artifacts   Data Source Service
              │                    │
-      Object Storage       Databases/APIs/files
+      Object Storage       HTTP APIs / JDBC sources
 ```
 
 The access path after publishing is:
 
 ```text
-Viewer → Immutable published frontend bundle → Data Gateway → Live data source
+Viewer → Immutable published frontend bundle → Data Source Service → Live data source
 ```
 
-Pi participates only in dashboard design and modification. Viewing or automatically refreshing a published dashboard does not invoke Pi. The frontend bundle is immutable, but its authorized runtime queries return current source data through the Data Gateway.
+Pi participates only in dashboard design and modification. Viewing or automatically refreshing a published dashboard does not invoke Pi. The frontend bundle is immutable, but its authorized runtime queries return current source data through the standalone Data Source Service.
+
+The Docker Compose deployment uses separate `mda-main` management and `mda-agent` Coding Agent images, backed by PostgreSQL, Redis, and Object Storage. See `docs/docker-compose-deployment-architecture.md`.
 
 ## 4. Agent Worker
 
@@ -175,7 +177,7 @@ describe_data_source
   Return fields, types, relationships, and available metrics.
 
 query_data_source
-  Execute a controlled, read-only exploratory query.
+  Execute a controlled HTTP request or JDBC read-only SQL exploration operation.
 
 validate_dashboard
   Validate the Manifest, source structure, dependencies, and security rules.
@@ -191,11 +193,11 @@ publish_dashboard
 
 When many data sources are available, use Pi's dynamic Tool activation so that only connectors needed by the current task are exposed to the model.
 
-## 7. Data Sources and Data Gateway
+## 7. Standalone Data Source Service
 
-Database, API, and file credentials must remain in the server-side credential system. They must never be written into prompts, dashboard source code, or the browser.
+HTTP API and JDBC credentials remain inside the standalone Data Source Service's secret boundary. They must never be written into prompts, dashboard source code, the Control Plane, or the browser.
 
-Data tools and the Data Gateway must enforce:
+Data Tools and the Data Source Service must enforce:
 
 - Read-only database accounts.
 - User, tenant, dashboard, and data-source authorization.
@@ -211,7 +213,9 @@ Separate two types of queries:
 1. **Design-time exploratory queries**: The Agent uses `query_data_source` to inspect schemas and sample data while generating a dashboard.
 2. **Runtime registered queries**: Publishing pins validated Query Revisions. The dashboard frontend submits only a Query ID and allowed parameters, never arbitrary SQL. One-time queries and automatic polling return current source data without an Agent Job.
 
-This preserves flexibility during generation while preventing published pages from executing arbitrary database queries.
+This preserves flexibility during generation while preventing published pages from executing arbitrary HTTP requests or database queries.
+
+The service owns Data Source CRUD, rename, configuration and Schema Revisions, HTTP and JDBC connectors, Query Revisions, health, events, and audit records. Other modules use versioned APIs and never access its tables or credentials. See `docs/data-source-management-module.md`.
 
 ## 8. Saving, Versioning, and Sharing
 
@@ -319,7 +323,7 @@ RPC provides a process boundary but is not itself a security boundary. The RPC p
 The first version should implement only:
 
 1. One fixed frontend build template with optional, pre-approved visualization libraries.
-2. One read-only data source.
+2. Managed HTTP and JDBC read-only Data Sources through the standalone Data Source Service.
 3. One independent Docker Worker running the Pi SDK.
 4. Chat events streamed to the browser through SSE.
 5. Live build output displayed in an iframe.

@@ -2,7 +2,7 @@
 
 ## 1. Goal
 
-This contract defines how the platform describes data sources and safely makes their data available to Agent-generated dashboards.
+This contract defines how the platform describes data sources and safely makes their data available to Agent-generated dashboards. The Data Gateway is the runtime execution surface of the standalone Data Source Service defined in `docs/data-source-management-module.md`.
 
 Core principle:
 
@@ -80,13 +80,14 @@ interface DataSource {
   tenantId: string;
   name: string;
   description?: string;
-  kind: "postgres";
-  status: "active" | "disabled" | "unavailable";
+  kind: "http" | "jdbc";
+  status: "draft" | "active" | "disabled" | "deleted";
+  health: "unknown" | "healthy" | "degraded" | "unreachable";
   schemaRevision: number;
 }
 ```
 
-The first implementation supports PostgreSQL only. Additional source kinds should be added only after the PostgreSQL flow works end to end.
+The first implementation supports HTTP JSON sources and JDBC sources. JDBC runs through the isolated JVM connector boundary defined in `docs/data-source-management-module.md`.
 
 Credentials are not part of this object. They remain in the server-side credential store and are never returned to the Agent, dashboard source, browser, or Manifest.
 
@@ -99,7 +100,7 @@ interface DataSourceDescription {
   id: string;
   name: string;
   description?: string;
-  kind: "postgres";
+  kind: "http" | "jdbc";
   schemaRevision: number;
   runtime: DataSourceRuntimeCapabilities;
   entities: DataEntity[];
@@ -172,29 +173,27 @@ These operations expose data capabilities without prescribing what the dashboard
 
 ## 7. Design-Time Exploration
 
-The Coding Agent may write read-only SQL to understand the source and validate an idea before creating a published query.
+The Coding Agent may define a bounded HTTP request or read-only JDBC SQL operation to understand the source and validate an idea before creating a published query.
 
 ```ts
 interface ExploreQueryRequest {
   sourceId: string;
-  statement: string;
+  operation: HttpOperation | JdbcSqlOperation;
   parameters?: Record<string, QueryParameterValue>;
 }
 ```
 
-Exploration queries must:
+All exploration operations must:
 
-- Run with a read-only database role.
-- Use a read-only transaction when supported.
-- Accept only a single statement.
-- Reject DDL and DML.
-- Use bound parameters instead of string interpolation.
+- Use typed, bound parameters instead of string interpolation.
 - Have a finite timeout.
 - Have finite row and response-size limits.
-- Be scoped to authorized schemas.
+- Be scoped to the authorized source configuration.
 - Be recorded in the audit log.
 
-The gateway validates safety but does not author or optimize the query on behalf of the Coding Agent.
+JDBC exploration additionally uses a read-only account and transaction, accepts one SQL statement, and rejects DDL and DML. HTTP exploration uses an approved host, method, path, headers, and response extractor and is protected against SSRF.
+
+The Data Source Service validates safety but does not author or optimize the operation on behalf of the Coding Agent.
 
 ## 8. Registered Query Model
 
@@ -206,9 +205,10 @@ interface QueryDefinition {
   revision: number;
   tenantId: string;
   sourceId: string;
+  sourceConfigRevision: number;
   name: string;
   description?: string;
-  statement: string;
+  operation: HttpOperation | JdbcSqlOperation;
   parameters: QueryParameterDefinition[];
   result: QueryResultSchema;
   runtimePolicy: QueryRuntimePolicy;
@@ -251,7 +251,7 @@ interface QueryRuntimePolicy {
 }
 ```
 
-The Coding Agent owns the query statement, name, description, and public parameters. The gateway owns validation, authorization, execution limits, credentials, and revision persistence.
+The Coding Agent owns the HTTP or JDBC query operation, name, description, and public parameters. The standalone Data Source Service owns validation, authorization, execution limits, credentials, and revision persistence.
 
 The result schema is inferred from a successful validation query when possible. It describes returned data and does not imply a visualization.
 
@@ -423,7 +423,7 @@ may be represented by the Coding Agent as:
 
 That decision belongs entirely to the Coding Agent and `src/`.
 
-Parameter values must be bound by the gateway. They must never be interpolated into SQL strings by the browser or Agent-generated runtime code.
+Parameter values must be bound by the Data Source Service. They must never be interpolated into SQL, URLs, headers, or bodies by the browser or Agent-generated runtime code.
 
 ## 13. Trusted Context Parameters
 
@@ -491,7 +491,10 @@ Errors are structured so the Coding Agent can diagnose and fix data access witho
 interface DataGatewayError {
   code:
     | "SOURCE_NOT_FOUND"
+    | "SOURCE_DISABLED"
+    | "SOURCE_DELETED"
     | "SOURCE_UNAVAILABLE"
+    | "CONNECTOR_UNAVAILABLE"
     | "FORBIDDEN"
     | "QUERY_INVALID"
     | "QUERY_NOT_FOUND"
@@ -555,8 +558,8 @@ No lifecycle state controls dashboard components or presentation.
 
 The first version includes:
 
-- PostgreSQL data sources only.
-- Read-only `SELECT` queries only.
+- HTTP JSON Data Sources with bounded GET and approved read-only POST operations.
+- JDBC Data Sources with parameterized read-only SQL through an isolated JVM Runner.
 - Agent-authored exploration queries.
 - Agent-authored registered queries.
 - Immutable query revisions.
@@ -577,13 +580,14 @@ The first version does not include:
 - A semantic modeling DSL.
 - A visual query builder.
 - Automatic query optimization.
-- API, spreadsheet, or file connectors.
+- Spreadsheet or file connectors.
+- User-uploaded JDBC driver JARs.
 
 ## 20. Acceptance Criteria
 
 The contract is satisfied when:
 
-1. The Agent can list and accurately describe an authorized PostgreSQL source.
+1. The Agent can list and accurately describe authorized HTTP and JDBC sources.
 2. Source descriptions contain data facts and no UI component instructions.
 3. The Agent can explore the source with safe read-only SQL.
 4. The Agent can register and test its own query.
@@ -601,7 +605,9 @@ The contract is satisfied when:
 
 ## 21. Next Design
 
-After this contract, define the Pi Agent Tool Contract that implements:
+The standalone Data Source management, connector, CRUD, and module boundary is defined in `docs/data-source-management-module.md`.
+
+The Pi Agent Tool Contract implements:
 
 - `list_data_sources`.
 - `describe_data_source`.

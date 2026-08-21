@@ -28,11 +28,14 @@ Core principles:
 | HTTP server | `Bun.serve` | Native routing, Web APIs, streaming responses, and no required server framework |
 | API style | REST/JSON + SSE | Simple commands over HTTP and one-way Agent event streaming |
 | Runtime validation | TypeBox + JSON Schema | Reuses the schema style required by Pi Tools and supports machine-readable contracts |
-| Metadata database | PostgreSQL | Transactions, constraints, JSONB, job leasing, auditing, and mature operations |
+| Metadata database | PostgreSQL | Authoritative transactions, constraints, durable jobs, events, and auditing |
+| Redis | Redis Streams, notifications, rate counters, and bounded cache | Fast Agent dispatch and live event wake-ups while PostgreSQL remains authoritative |
 | Database client | Bun's built-in SQL client | Pooling and parameterized SQL without an ORM or generated client |
 | Artifact storage | S3-compatible Object Storage through Bun's S3 client | Immutable source snapshots, sessions, previews, and published bundles |
 | Local object storage | MinIO | Local S3 compatibility without changing application code |
 | Coding Agent | `@earendil-works/pi-coding-agent` SDK | Full AgentSession, Tools, Skills, events, compaction, and session support |
+| Data Source module | Standalone Bun service | Decoupled CRUD, connector, query, health, and execution ownership |
+| JDBC interoperability | Isolated JVM JDBC Runner | JDBC is a Java API and cannot run directly inside Bun |
 | Unit/integration tests | `bun test` | Built into the runtime |
 | Browser tests | Playwright | Real-browser verification for preview, iframe, Runtime SDK, and publishing flows |
 | Formatting/linting | Biome | One fast formatter and linter for TypeScript, JSON, and CSS |
@@ -110,8 +113,7 @@ Use dependencies where they remove real risk or substantial boilerplate:
 Do not add these initially:
 
 - An ORM.
-- Redis.
-- Kafka or another message broker.
+- Kafka or another additional message broker.
 - Kubernetes-specific libraries.
 - A dependency-injection container.
 - A server framework around `Bun.serve`.
@@ -120,48 +122,40 @@ Do not add these initially:
 - A monorepo orchestrator such as Nx or Turborepo.
 - A component DSL or visual page builder.
 
-PostgreSQL, Bun workspaces, native Fetch/Web Streams, and small domain modules cover the initial requirements.
+PostgreSQL, Redis, Bun workspaces, native Fetch/Web Streams, and small domain modules cover the initial requirements.
 
 ## 6. Logical Architecture
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
 │ Clients                                                      │
-│                                                              │
 │ Browser: Management UI / Viewer Host / Preview shell         │
 │ mda CLI: commands / chat / events / diagnostics / export     │
 └───────────────────────┬──────────────────────────────────────┘
                         │ HTTPS: REST + SSE
 ┌───────────────────────▼──────────────────────────────────────┐
 │ Bun Control Plane                                            │
-│                                                              │
-│ Auth            Dashboard lifecycle       Agent job API      │
-│ Data Gateway    Query registry             Publish/share      │
-│ SSE replay      Runtime message bridge     Audit              │
-└───────────────┬───────────────────┬───────────────────────────┘
-                │                   │
-          PostgreSQL          S3-compatible storage
-                │                   │
-                │             source/session/build artifacts
-                │
-┌───────────────▼──────────────────────────────────────────────┐
-│ Bun Agent Controller                                         │
-│ Claims jobs, leases work, starts isolated Agent Runners       │
-└───────────────┬──────────────────────────────────────────────┘
-                │ one isolated execution environment per job
-┌───────────────▼──────────────────────────────────────────────┐
-│ Bun Agent Runner + Pi SDK                                    │
-│ Controlled workspace, explicit Skill, allowlisted Tools       │
-│ Generates src, tests, builds, validates, snapshots            │
-└───────────────┬──────────────────────────────────────────────┘
-                │ scoped internal HTTPS only
-┌───────────────▼──────────────────────────────────────────────┐
-│ Data Gateway endpoints in the Control Plane                  │
-│ Credentials and authorized read-only source execution         │
+│ Auth, dashboards, Agent jobs, Query Bindings, publish/share  │
+└───────────┬────────────────┬─────────────────┬───────────────┘
+            │                │                 │ signed internal HTTP
+      PostgreSQL      Object Storage           │
+                                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ Standalone Bun Data Source Service                           │
+│ CRUD, schema, HTTP/JDBC connectors, queries, health, audit   │
+└──────────────┬───────────────────────────┬───────────────────┘
+               │                           │
+         Remote HTTP APIs          Isolated JVM JDBC Runner
+                                           │
+                                      SQL databases
+
+┌──────────────────────────────────────────────────────────────┐
+│ Independent mda-agent image + Pi SDK                         │
+│ Redis Job consumer; Tools call versioned internal APIs        │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-The Data Gateway is a logical module inside the Control Plane for the first version. It is not a separate network service until independent scaling or network isolation requires it.
+The Data Source Service is a standalone module with its own persistence, migrations, connectors, events, and audit records. Other modules communicate with it only through versioned contracts. Its detailed boundary is defined in `docs/data-source-management-module.md`.
 
 ## 7. Deployable Units
 
@@ -192,47 +186,43 @@ A Bun service built on `Bun.serve` that owns:
 
 - Authentication and tenant context.
 - Dashboard, Revision, Publication, and Share Link lifecycles.
-- Data-source descriptions and Query Revisions.
-- Data Gateway runtime execution.
+- Dashboard Query Bindings that reference external Query Revisions.
+- User-facing Data Source management orchestration through the standalone service.
 - Agent job creation, cancellation, and status.
 - SSE event replay.
 - Object-storage metadata and signed artifact access.
 - Audit records.
 
-The Control Plane never executes generated dashboard code and never gives its data-source credentials to the Agent Runner.
+The Control Plane never executes generated dashboard code, resolves Data Source credentials, or gives those credentials to the Agent Runner.
 
-### 7.4 Agent Controller
+### 7.4 Data Source Service
 
-A Bun process that:
+A standalone Bun service that owns Data Source CRUD, configuration and Schema Revisions, HTTP connectors, JDBC connector orchestration, Query Revisions, live execution, health, events, and audit records.
 
-- Claims queued Agent Jobs from PostgreSQL.
-- Acquires a time-limited lease.
-- Starts an isolated Agent Runner.
-- Sends only job-scoped configuration and credentials.
-- Renews the lease while the Runner is healthy.
-- Requests cancellation when a job is cancelled.
-- Records terminal job state when the Runner exits.
+JDBC operations are delegated through a protected internal protocol to an isolated JVM JDBC Runner with allowlisted drivers. The service's full management and connector contract is defined in `docs/data-source-management-module.md`.
 
-The Agent Controller is separate from the public Control Plane so the web-facing process never needs container-launch privileges.
+### 7.5 Independent Agent Image
 
-### 7.5 Agent Runner
-
-An ephemeral Bun execution environment containing:
+`mda-agent` is an independent Bun image containing:
 
 - Pi SDK.
+- Redis Stream Job consumer.
 - The approved dashboard template and dependencies.
-- Platform-maintained Skills.
-- Platform-maintained custom Tools.
-- One dashboard workspace.
+- Platform-maintained Skills and custom Tools.
+- One temporary dashboard workspace per active Job.
 - Build and validation commands.
 
-One Runner handles one Agent Job and then exits. It does not retain another tenant's workspace or credentials.
+Each Agent container runs one Job at a time, acquires and renews its authoritative lease through the Control Plane, and erases temporary workspace state before accepting another Job. It has no Control Plane database or Data Source credential and no Docker socket.
 
 ### 7.6 PostgreSQL
 
-PostgreSQL stores transactional metadata, job state, and durable event cursors. It does not store large source archives or built bundles.
+PostgreSQL stores transactional metadata, job state, and durable event cursors. The Control Plane and Data Source Service own separate databases or schemas and never access each other's tables. PostgreSQL does not store large source archives or built bundles.
 
-### 7.7 Object Storage
+### 7.7 Redis
+
+Redis provides Agent Job Streams, event wake-up notifications, bounded rate counters, and optional authorization-scoped Query Result caching. PostgreSQL remains the system of record, and outboxes reconstruct Redis delivery after data loss.
+
+### 7.8 Object Storage
 
 S3-compatible storage contains:
 
@@ -254,9 +244,11 @@ mda/
 ├── apps/
 │   ├── web/                  # React management UI and viewer host
 │   ├── cli/                  # Bun CLI executable named mda
-│   ├── control-plane/        # Bun HTTP API, SSE, Data Gateway
-│   ├── agent-controller/     # Job leasing and Runner orchestration
-│   └── agent-runner/         # Pi SDK integration and Tool execution
+│   ├── control-plane/        # Bun HTTP API, SSE, Dashboard orchestration
+│   ├── data-source-service/  # CRUD, HTTP/JDBC connectors, Query execution
+│   └── agent/                # Independent mda-agent image and Pi SDK worker
+├── connectors/
+│   └── jdbc-runner/          # Isolated JVM JDBC interoperability runtime
 ├── packages/
 │   ├── contracts/            # TypeBox schemas and shared API types
 │   ├── dashboard-runtime/    # iframe/runtime API used by generated src
@@ -268,7 +260,7 @@ mda/
 └── package.json
 ```
 
-Do not create a package for every domain concept. Keep dashboard, query, publication, and job logic as modules inside the Control Plane until another deployable unit genuinely needs to import them.
+Do not create a package for every domain concept. Keep dashboard, publication, and job logic as modules inside the Control Plane. Data Source and Query execution are separate because they own credentials, connectors, persistence, and an independently secured runtime boundary.
 
 ## 9. Architecture Control Rules
 
@@ -286,13 +278,13 @@ HTTP routes / job handlers
 - Domain functions implement lifecycle and transaction rules.
 - Database functions contain SQL.
 - Storage functions contain S3 operations.
-- Agent Tools call internal Control Plane APIs; they do not import Control Plane database code.
+- Agent Tools call versioned internal APIs; they do not import Control Plane or Data Source Service database or connector code.
 
 Do not add abstract interfaces with one implementation merely to imitate Clean Architecture. Introduce an interface only at a real process, storage, provider, or test boundary.
 
 ### 9.2 Shared Contracts
 
-`packages/contracts` is the only package shared by the browser, CLI, Control Plane, and Agent code. It contains:
+`packages/contracts` is the only package shared by the browser, CLI, Control Plane, Data Source Service, and Agent code. It contains:
 
 - TypeBox request and response schemas.
 - Dashboard Manifest schema.
@@ -323,8 +315,9 @@ The platform does not parse the component tree, choose controls, prescribe chart
 
 - Browser code never connects to PostgreSQL or Object Storage with permanent credentials.
 - Generated dashboards never call data sources directly.
-- Agent Runners never read Control Plane database credentials.
-- The Control Plane never executes generated code.
+- Agent Runners never read Control Plane or Data Source credentials.
+- The Control Plane never executes generated code or connects directly to managed Data Sources.
+- The Data Source Service never reads Control Plane tables or Dashboard source.
 - Public viewer requests never invoke Pi.
 
 ## 10. Control Plane Module Structure
@@ -338,8 +331,8 @@ apps/control-plane/src/
 ├── dashboards/
 ├── revisions/
 ├── publications/
-├── data-sources/
-├── queries/
+├── data-source-client/
+├── query-bindings/
 ├── agent-jobs/
 ├── events/
 ├── runtime/
@@ -371,9 +364,6 @@ dashboard_revisions
 publications
 share_links
 
-data_sources
-query_definitions
-query_revisions
 dashboard_query_bindings
 
 agent_sessions
@@ -388,14 +378,16 @@ Important ownership rules:
 - Every tenant-owned row contains `tenant_id`.
 - Every Dashboard Revision is immutable after validation begins.
 - Every Publication points to one immutable Dashboard Revision.
-- Every published Query Binding points to one immutable Query Revision.
+- Every published Query Binding references one immutable Query Revision owned and validated by the Data Source Service API.
 - Every Agent Job belongs to one Dashboard and one Agent Session.
 - Agent Events are append-only and ordered within a Job.
-- Secrets are represented by secret references, not plaintext credential columns.
+- The Control Plane stores no Data Source secrets; the Data Source Service stores secret references rather than plaintext credentials.
+
+The Data Source Service separately owns Data Sources, Config Revisions, Schema Revisions, Query Definitions, Query Revisions, health, source events, and source audits.
 
 Use PostgreSQL foreign keys, unique constraints, and checks for invariants that the database can enforce. Do not duplicate those guarantees only in TypeScript.
 
-## 12. Agent Job Controller
+## 12. Agent Job Dispatch and Lease
 
 ### 12.1 Job State
 
@@ -417,11 +409,13 @@ A Job record includes:
 - Created, started, and finished timestamps.
 - Sanitized terminal error.
 
-### 12.2 Claiming Work
+### 12.2 Dispatch and Claim
 
-The Agent Controller claims work using a short PostgreSQL transaction and `FOR UPDATE SKIP LOCKED`. The lease has an expiry and is renewed by heartbeat.
+The Control Plane creates each Job and an outbox record in one PostgreSQL transaction. An internal dispatcher appends the Job ID to a Redis Stream after commit.
 
-A crashed controller does not permanently own a Job. An expired Job may be reclaimed only if its previous Runner is confirmed dead or isolated.
+An `mda-agent` consumer receives the stream entry and calls the Control Plane to claim the Job. The Control Plane acquires a time-limited PostgreSQL lease. The Agent renews the lease by heartbeat and acknowledges the Redis entry only after terminal state is durable.
+
+A crashed Agent does not permanently own a Job. Expired leases and Redis pending entries allow bounded recovery. PostgreSQL state and idempotency prevent a stale or duplicate Agent from publishing.
 
 ### 12.3 Idempotency
 
@@ -431,7 +425,7 @@ Publishing also requires an idempotency key because browser retries must not cre
 
 ### 12.4 Cancellation
 
-Cancellation sets a durable flag in PostgreSQL. The Agent Controller forwards it to the Runner, and the Runner calls `session.abort()` and terminates active subprocesses.
+Cancellation sets a durable flag in PostgreSQL and publishes a Redis wake-up. The active `mda-agent` verifies cancellation through the Control Plane, calls `session.abort()`, and terminates active subprocesses.
 
 A cancelled Job cannot publish an artifact.
 
@@ -462,9 +456,9 @@ The SSE endpoint:
 4. Sends periodic keepalive comments.
 5. Ends after the terminal event.
 
-The Agent Runner should coalesce very small text deltas before persistence to avoid one PostgreSQL row per token. Final messages and Tool state transitions remain authoritative.
+The Agent should coalesce very small text deltas before persistence to avoid one PostgreSQL row per token. Final messages and Tool state transitions remain authoritative.
 
-PostgreSQL polling is sufficient initially. `LISTEN/NOTIFY` may later reduce latency but is only a wake-up optimization; durable events remain in the table.
+Agent events are persisted in PostgreSQL before a lightweight Redis wake-up notification is published. SSE reconnect always replays durable events from PostgreSQL; Redis is latency optimization, not event history.
 
 ## 14. Pi Agent Runner
 
@@ -759,12 +753,12 @@ Use `bun test` for:
 
 ### 24.2 Integration Tests
 
-Use disposable PostgreSQL and MinIO instances for:
+Use disposable PostgreSQL, Redis, MinIO, HTTP fixture, and JDBC Runner instances for:
 
-- SQL migrations and constraints.
-- Job claiming and lease recovery.
-- Event ordering and SSE replay.
-- Source descriptions and read-only queries.
+- Independently owned SQL migrations and constraints.
+- Redis Stream dispatch, PostgreSQL leases, and crash recovery.
+- Durable event ordering, Redis wake-ups, and SSE replay.
+- HTTP and JDBC Source management, descriptions, and read-only queries.
 - Revision snapshots and publication artifacts.
 
 ### 24.3 Pi SDK Compatibility Test
@@ -795,15 +789,20 @@ Use Playwright for:
 
 ## 25. Local Development
 
-Use Docker Compose only for infrastructure:
+Docker Compose is the canonical full-stack deployment and integration environment:
 
 ```text
+mda-main
+mda-agent
+mda-datasource
+mda-jdbc-runner
 PostgreSQL
+Redis
 MinIO
 optional local OIDC test provider
 ```
 
-Run TypeScript applications with Bun on the host for fast iteration:
+Developers may run TypeScript applications with Bun on the host for faster inner-loop iteration:
 
 ```bash
 bun install
@@ -816,8 +815,8 @@ The Agent Runner should still execute in its container during integration tests 
 Provide one seed command that creates:
 
 - A development tenant and user mapping.
-- One sample PostgreSQL data source.
-- A small sales schema.
+- One sample HTTP Data Source and one JDBC test Data Source.
+- A small sales schema and fixture HTTP API.
 - One empty dashboard.
 
 ## 26. Production Deployment
@@ -825,49 +824,51 @@ Provide one seed command that creates:
 Initial production topology:
 
 ```text
-Static Web/CDN
-Bun Control Plane replicas
-Bun Agent Controller
-Ephemeral Agent Runner containers
-Managed PostgreSQL
+mda-main management image
+mda-agent independent Coding Agent image
+mda-datasource standalone Data Source image
+mda-jdbc-runner isolated JDBC image
+PostgreSQL
+Redis
 S3-compatible Object Storage
 External OIDC provider
 ```
 
-Do not require Kubernetes for the first deployment. A container platform that can run a web service, a worker, and isolated jobs is sufficient.
+Docker Compose is the first deployment controller. It can scale Agent workers on one host with `docker compose up -d --scale agent=N`.
 
 Scale independently only where needed:
 
-- Control Plane replicas for HTTP and SSE load.
-- Agent Controller capacity for concurrent jobs.
-- Agent Runner count for generation workloads.
-- PostgreSQL and Object Storage through managed scaling.
+- Main replicas for HTTP and SSE load when an external load balancer is added.
+- Agent replicas for generation workloads.
+- Data Source Service for connector and query load.
+- PostgreSQL, Redis, and Object Storage through managed scaling.
 
-The Data Gateway becomes a separate service only if source network placement, query load, or credential isolation requires it.
+The complete network, secret, image, queue, and failure design is defined in `docs/docker-compose-deployment-architecture.md`.
 
 ## 27. Implementation Order
 
 ### Phase 1: Foundation
 
 1. Create Bun workspace and strict TypeScript configuration.
-2. Add `contracts`, Control Plane, Web, CLI, and Agent Runner workspaces.
-3. Add PostgreSQL migrations and Bun SQL access.
-4. Add S3-compatible artifact storage.
-5. Add shared error and configuration schemas.
+2. Add `contracts`, Control Plane, Web, CLI, Data Source Service, and Agent workspaces.
+3. Add independently owned PostgreSQL migrations and Bun SQL access.
+4. Add Redis Streams and transactional outbox dispatch.
+5. Add S3-compatible artifact storage.
+6. Add Docker Compose, separate Main and Agent images, and shared error/configuration schemas.
 
 ### Phase 2: Agent Vertical Slice
 
 1. Create a dashboard and Agent Job.
-2. Run Pi SDK inside an isolated Bun Agent Runner.
-3. Stream events through PostgreSQL and SSE.
+2. Run Pi SDK inside the independent `mda-agent` image.
+3. Dispatch through Redis Streams and persist events in PostgreSQL before SSE notification.
 4. Generate source from the fixed template.
 5. Build a preview with Bun and Vite.
 6. Render the preview in the isolated iframe.
 
 ### Phase 3: Data Vertical Slice
 
-1. Register one PostgreSQL source.
-2. Implement source description.
+1. Create and manage one HTTP Source and one JDBC Source through the standalone service.
+2. Implement connector-neutral source description.
 3. Add Agent exploration and query registration Tools.
 4. Bind a Query Revision to a Dashboard Revision.
 5. Execute it through `dashboard.query()`.
@@ -893,7 +894,7 @@ The Data Gateway becomes a separate service only if source network placement, qu
 
 The architecture is acceptable when:
 
-1. All first-party application code is TypeScript executed or built with Bun.
+1. All core application and management code is TypeScript executed or built with Bun; the JVM is isolated to the JDBC interoperability image required by JDBC.
 2. The direct Pi SDK path passes under the pinned Bun version.
 3. The public Control Plane cannot execute generated code.
 4. Each Agent Job runs in an isolated environment with one workspace.
@@ -902,9 +903,12 @@ The architecture is acceptable when:
 7. Published viewers never invoke Pi.
 8. Agent events survive browser reconnects.
 9. Dashboard and Query Revisions are immutable once published.
-10. The Data Gateway describes data without describing components.
+10. The standalone Data Source Service describes data without describing components and owns HTTP/JDBC connector execution.
 11. The aesthetics Skill guides appearance without defining a component schema.
 12. The Coding Agent retains full control over `src/**` and `public/**`.
-13. The system operates without Redis, Kafka, Kubernetes, an ORM, or a low-code DSL in the first version.
+13. The system uses PostgreSQL as authority and Redis for Streams, notifications, bounded coordination, and optional cache without requiring Kafka, Kubernetes, an ORM, or a low-code DSL.
 14. The `mda` CLI reaches feature parity through the same Control Plane API and stable event contracts used by the web client.
 15. Published Dashboards refresh current authorized data without invoking Pi, rebuilding, or creating source Revisions.
+16. `mda-main` and `mda-agent` are separate images with separate credentials, networks, and responsibilities.
+17. Docker Compose starts the complete PostgreSQL, Redis, Object Storage, Data Source, Main, JDBC, and Agent topology.
+18. Control Plane and Data Source Service own separate persistence and communicate only through versioned contracts.
