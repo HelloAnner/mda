@@ -832,6 +832,36 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build
 
 ## 20. Deployment Procedure
 
+### 20.1 Single-host entrypoint
+
+The repository's operational entrypoint is:
+
+```bash
+make deploy
+```
+
+It checks the server through the fixed `moss-dev-2` SSH alias, synchronizes the
+source tree to `/srv/mda`, builds every local image, and starts the complete
+Compose project on host port `8356` by default. The real server address remains
+in the operator's SSH configuration and must never appear in the repository.
+
+The target's ignored `.env` and `var/secrets/` files are bootstrapped when
+missing and preserved across subsequent source synchronizations. If the server
+cannot be reached, the same command builds and starts the Compose project on
+the local computer. Runtime feature verification should use the server whenever
+it is reachable:
+
+```bash
+make status
+make health
+make tunnel
+```
+
+After opening the tunnel in a separate terminal, the local CLI reaches the
+server at `http://localhost:8356`.
+
+### 20.2 Release sequence
+
 ```text
 1. Build and tag all MDA images with one release version.
 2. Generate or provision secrets outside the repository.
