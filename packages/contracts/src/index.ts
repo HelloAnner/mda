@@ -6,6 +6,10 @@ export {
   PendingAgentEventSchema,
 } from "./internal/agent/v1/events.ts";
 export {
+  type AgentDataSourceContext,
+  AgentDataSourceContextSchema,
+  type AgentDataSourceSummary,
+  AgentDataSourceSummarySchema,
   type AgentLeaseCommand,
   AgentLeaseCommandSchema,
   type ClaimAgentJobRequest,

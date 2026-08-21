@@ -20,6 +20,7 @@ const AgentFileSchema = Type.Object(
         internal_token_env: EnvironmentNameSchema,
         control_plane_url: Type.String({ minLength: 1 }),
         workspace_root: Type.Optional(Type.String({ minLength: 1 })),
+        skills_root: Type.Optional(Type.String({ minLength: 1 })),
         model: Type.Object(
           {
             provider: Type.String({ minLength: 1 }),
@@ -42,6 +43,7 @@ export interface AgentConfig {
   controlPlaneUrl: string;
   redisUrl: string;
   workspaceRoot: string;
+  skillsRoot: string;
   consumerId: string;
   leaseMs: number;
   workers: number;
@@ -142,6 +144,12 @@ export function loadAgentConfig(
       env.MDA_AGENT_WORKSPACE_ROOT ??
       value.agent.workspace_root ??
       "/workspace",
+    skillsRoot: resolve(
+      dirname(path),
+      env.MDA_AGENT_SKILLS_ROOT ??
+        value.agent.skills_root ??
+        "apps/agent/skills",
+    ),
     consumerId: env.MDA_AGENT_CONSUMER ?? `${hostname()}-${process.pid}`,
     leaseMs: value.agent.lease_ms ?? 30_000,
     workers,

@@ -209,6 +209,7 @@ JDBC operations are delegated through a protected internal protocol to an isolat
 - Redis Stream Job consumer.
 - The approved dashboard template and dependencies.
 - Platform-maintained Skills and custom Tools.
+- The Chinese-by-default Moss role with authoritative Data Source, Skill, and Tool prompt sections.
 - One logical workspace and Pi history per active MDA Session.
 - Build and validation commands.
 

@@ -75,6 +75,7 @@ export async function runWorker(
           dashboardId: claimed.job.dashboardId,
           sessionId: claimed.job.sessionId,
           prompt: claimed.prompt,
+          dataSources: claimed.dataSources,
           signal: runAbort.signal,
           onEvent: (type, data) => events.push(type, data),
         });

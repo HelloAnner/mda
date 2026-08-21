@@ -27,6 +27,7 @@ workers = 8
 internal_token_env = "INTERNAL_AGENT_TOKEN"
 control_plane_url = "http://localhost:8080"
 workspace_root = "./var/agent"
+skills_root = "./apps/agent/skills"
 
 [agent.model]
 provider = "openai-compatible"

@@ -15,6 +15,7 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=dependencies /app/apps/agent/node_modules ./apps/agent/node_modules
 COPY --from=dependencies /app/packages/contracts/node_modules ./packages/contracts/node_modules
 COPY apps/agent/src ./apps/agent/src
+COPY apps/agent/skills ./apps/agent/skills
 COPY packages/contracts/package.json ./packages/contracts/package.json
 COPY packages/contracts/src ./packages/contracts/src
 COPY mda.example.toml ./mda.example.toml

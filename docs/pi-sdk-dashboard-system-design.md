@@ -90,6 +90,15 @@ Each MDA Session should have an independent workspace and Pi Session:
 └── runtime/     # Session-local Pi runtime files
 ```
 
+Every Coding Agent has the fixed identity **Moss**: a professional dashboard-generation and programming assistant. MDA is the project name and is not part of Moss's identity. Its system prompt is written in Chinese and responses default to Chinese for the initial China-based users; it follows an explicit user request to use another language.
+
+The Worker builds every Session system prompt from authoritative sections:
+
+- **Role and conversation:** Moss's professional dashboard role, natural small talk, Chinese-by-default responses, and continuity from persisted Pi history.
+- **Data Sources:** credential-free, read-only availability and source summaries from the claimed Job; when none exist, require labeled fixture data or an empty state. Moss cannot perform Data Source management or configuration.
+- **Skills:** reviewed platform Skill names and descriptions from `agent.skills_root`.
+- **Tools:** the exact enabled Tool allowlist.
+
 The Worker is responsible for:
 
 1. Creating or restoring the MDA Session's `AgentSession`.
@@ -267,15 +276,15 @@ Production requires operating-system-level isolation:
 - A VM or micro-VM.
 - A policy-controlled remote sandbox.
 
-The Worker should mount only the current dashboard workspace, receive only necessary short-lived credentials, and have unnecessary network access disabled.
+The current single-host deployment gives each conversation a validated Session directory on an Agent-only Docker volume. This is path isolation, not a hostile-code sandbox. A later sandboxed deployment should mount only the assigned Session workspace, provide short-lived credentials, and disable unnecessary network access.
 
 ### 9.2 Disable Default Resource Discovery
 
 By default, `createAgentSession()` may discover Skills, Extensions, Context Files, and configuration from the host and project directories. A multi-tenant system should use an explicit `ResourceLoader`:
 
-- Load only platform-maintained Skills.
-- Load only platform-maintained Extensions.
-- Configure an explicit Tool allowlist.
+- Load reviewed Skills only from the configured platform `skills_root`.
+- Load no Extensions until a reviewed platform Extension is explicitly configured.
+- Configure the explicit `read`, `bash`, `write`, `edit`, `grep`, `find`, and `ls` Tool allowlist.
 - Never load `.pi/extensions` from user workspaces.
 - Do not allow generated code to gain privileges by reloading resources.
 

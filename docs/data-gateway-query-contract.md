@@ -93,7 +93,7 @@ Credentials are not part of this object. They remain in the server-side credenti
 
 ## 5. Data Source Description
 
-The Agent needs an accurate description of the data source so it can decide what to build. The description is factual and contains no UI instructions.
+The Agent needs an accurate description of the data source so it can decide what to build. Every claimed Job carries a compact, credential-free source summary in Moss's system prompt; full descriptions are loaded on demand through `describe_data_source`. The description is factual and contains no UI instructions.
 
 ```ts
 interface DataSourceDescription {
@@ -149,6 +149,8 @@ The description may include database comments maintained by the data owner. It m
 Sample values are not included by default. The Agent may request samples through an authorized exploration query when needed.
 
 ## 6. Data Source Discovery
+
+Moss uses this contract only for dashboard-oriented discovery and read-only exploration. Data Source lifecycle and configuration remain management operations outside Moss's Tool allowlist.
 
 The Agent-facing operations are:
 

@@ -58,65 +58,81 @@ export async function chat(
   }
 }
 
-async function watchJob(
+export async function watchJob(
   config: ApiClientConfig,
   initialJob: AgentJob,
+  fetchEvents: typeof apiFetch = apiFetch,
+  readJob: typeof apiRequest = apiRequest,
 ): Promise<void> {
   let cursor = 0;
   let printedAssistant = false;
   while (true) {
-    const response = await apiFetch(
-      config,
-      `/api/agent-jobs/${encodeURIComponent(initialJob.id)}/events?after=${cursor}`,
-      { headers: cursor ? { "last-event-id": String(cursor) } : {} },
-    );
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error("Control Plane returned no event stream");
-    const decoder = new TextDecoder();
-    let buffer = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      buffer += decoder.decode(value, { stream: !done });
-      const blocks = buffer.split("\n\n");
-      buffer = blocks.pop() ?? "";
-      for (const block of blocks) {
-        const event = parseSseEvent(block);
-        if (!event || event.sequence <= cursor) continue;
-        cursor = event.sequence;
-        if (event.type === "assistant.delta") {
-          if (!printedAssistant) {
-            process.stdout.write("Agent › ");
+    let streamCompleted = false;
+    try {
+      const response = await fetchEvents(
+        config,
+        `/api/agent-jobs/${encodeURIComponent(initialJob.id)}/events?after=${cursor}`,
+        { headers: cursor ? { "last-event-id": String(cursor) } : {} },
+      );
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("Control Plane returned no event stream");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        const blocks = buffer.split("\n\n");
+        buffer = blocks.pop() ?? "";
+        for (const block of blocks) {
+          const event = parseSseEvent(block);
+          if (!event || event.sequence <= cursor) continue;
+          cursor = event.sequence;
+          if (event.type === "assistant.delta") {
+            if (!printedAssistant) {
+              process.stdout.write("Agent › ");
+              printedAssistant = true;
+            }
+            process.stdout.write(String(event.data.text ?? ""));
+          } else if (
+            event.type === "assistant.completed" &&
+            !printedAssistant
+          ) {
+            process.stdout.write(`Agent › ${String(event.data.text ?? "")}`);
             printedAssistant = true;
+          } else if (event.type === "tool.started") {
+            process.stderr.write(
+              `\n  ${String(event.data.toolName ?? "tool")} …\n`,
+            );
+          } else if (event.type === "tool.completed") {
+            process.stderr.write(
+              `  ${String(event.data.toolName ?? "tool")} ${event.data.isError ? "failed" : "done"}\n`,
+            );
+          } else if (event.type === "agent.failed") {
+            process.stderr.write(
+              `\nAgent failed: ${String(event.data.message ?? "Unknown error")}\n`,
+            );
           }
-          process.stdout.write(String(event.data.text ?? ""));
-        } else if (event.type === "assistant.completed" && !printedAssistant) {
-          process.stdout.write(`Agent › ${String(event.data.text ?? "")}`);
-          printedAssistant = true;
-        } else if (event.type === "tool.started") {
-          process.stderr.write(
-            `\n  ${String(event.data.toolName ?? "tool")} …\n`,
-          );
-        } else if (event.type === "tool.completed") {
-          process.stderr.write(
-            `  ${String(event.data.toolName ?? "tool")} ${event.data.isError ? "failed" : "done"}\n`,
-          );
-        } else if (event.type === "agent.failed") {
-          process.stderr.write(
-            `\nAgent failed: ${String(event.data.message ?? "Unknown error")}\n`,
-          );
+        }
+        if (done) {
+          streamCompleted = true;
+          break;
         }
       }
-      if (done) break;
+    } catch {
+      // Durable events resume from cursor on the next loop.
     }
 
-    const job = await apiRequest(
+    const job = await readJob(
       config,
       `/api/agent-jobs/${encodeURIComponent(initialJob.id)}`,
     );
     if (!Value.Check(AgentJobSchema, job)) {
       throw new Error("Control Plane returned invalid Agent Job data");
     }
-    if (["succeeded", "failed", "cancelled"].includes(job.state)) {
+    if (
+      streamCompleted &&
+      ["succeeded", "failed", "cancelled"].includes(job.state)
+    ) {
       if (printedAssistant) process.stdout.write("\n");
       if (job.terminalError) {
         process.stderr.write(

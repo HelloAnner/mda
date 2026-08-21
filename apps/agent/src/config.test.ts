@@ -19,6 +19,7 @@ lease_ms = 30000
 workers = 3
 control_plane_url = "http://main:8080"
 workspace_root = "/tmp/mda-workspace"
+skills_root = "./skills"
 [agent.model]
 provider = "openai-compatible"
 model = "test-model"
@@ -47,6 +48,7 @@ api_key_env = "TEST_MODEL_API_KEY"
       controlPlaneUrl: "http://container-main:8080",
       redisUrl: "redis://redis:6379",
       workspaceRoot: "/workspace",
+      skillsRoot: join(directory, "skills"),
       consumerId: "agent-test",
       leaseMs: 30_000,
       workers: 4,

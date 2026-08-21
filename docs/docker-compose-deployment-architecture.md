@@ -86,6 +86,8 @@ It does not contain:
 - Host filesystem mounts.
 - Host Pi configuration or credentials.
 
+The Agent uses an explicit restricted Pi `ResourceLoader`. It loads only reviewed platform Skills from `agent.skills_root`; generated workspaces and host Pi directories cannot inject Skills or Extensions. The enabled Coding Tools are `read`, `bash`, `write`, `edit`, `grep`, `find`, and `ls`, all running inside the Agent container. The Chinese Session system prompt identifies the assistant as **Moss**, defaults responses to Chinese, supports natural multi-turn conversation, and uses Tools only when the request needs them.
+
 Each Agent container runs a configurable pool of Coding Agent workers (`MDA_AGENT_WORKERS`, bounded to 1–64). Every worker processes one Job at a time, while the container can multiplex many conversations concurrently. Each MDA Session owns a separate Pi `AgentSession`, history directory, and logical workspace on the shared single-host Agent volume.
 
 Dashboard and Session IDs are validated as single path segments before these directories are resolved. Separate `workspace/`, `history/`, and `runtime/` subtrees prevent accidental file overlap but are not a security sandbox. The initial trusted single-host deployment intentionally defers hostile multi-tenant sandboxing; multi-host deployment requires moving Session snapshots to S3-compatible storage.

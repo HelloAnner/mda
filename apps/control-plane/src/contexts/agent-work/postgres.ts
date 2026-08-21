@@ -322,6 +322,7 @@ export async function claimAgentJob(
       return {
         job: toAgentJob(updated),
         prompt: String(row.prompt_text),
+        dataSources: { status: "not-configured", items: [] },
         lease: {
           owner,
           fencingToken: persisted.fencingToken,

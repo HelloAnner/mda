@@ -3,12 +3,13 @@ import { join } from "node:path";
 import {
   createAgentSession,
   createExtensionRuntime,
+  loadSkillsFromDir,
   ModelRuntime,
   type ResourceLoader,
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { AgentEventType } from "@mda/contracts";
+import type { AgentDataSourceContext, AgentEventType } from "@mda/contracts";
 import type { AgentConfig } from "../config.ts";
 
 export type PiModelRuntime = {
@@ -77,19 +78,67 @@ export async function createPiModelRuntime(
   return { modelRuntime, model };
 }
 
-function resourceLoader(): ResourceLoader {
+const codingTools = [
+  "read",
+  "bash",
+  "write",
+  "edit",
+  "grep",
+  "find",
+  "ls",
+] as const;
+
+function resourceLoader(
+  skillsRoot: string,
+  dataSources: AgentDataSourceContext,
+): ResourceLoader {
+  const skills = loadSkillsFromDir({
+    dir: skillsRoot,
+    source: "mda-platform",
+  });
+  const dataSourceSummary =
+    dataSources.status === "not-configured"
+      ? "尚未配置数据源服务。请使用明确标注的模拟数据或空状态，绝不能声称数据是实时的。"
+      : dataSources.status === "unavailable"
+        ? "数据源服务暂时不可用。请保留已有绑定，不要编造数据源或数据。"
+        : dataSources.items.length === 0
+          ? "数据源服务可用，但当前看板没有已授权的数据源。请使用明确标注的模拟数据或空状态。"
+          : dataSources.items
+              .map(
+                (source) =>
+                  `- ${source.name}（${source.id}）：类型 ${source.kind}，状态 ${source.status}，Schema 修订版 ${source.schemaRevision}${source.description ? ` — ${source.description}` : ""}`,
+              )
+              .join("\n");
+  const skillSummary = skills.skills.length
+    ? skills.skills
+        .map((skill) => `- ${skill.name}: ${skill.description}`)
+        .join("\n")
+    : "未配置平台 Skill。";
+  const systemPrompt = `你是 Moss，一名专业的看板生成与编程助手，也是能够持续多轮对话的协作伙伴。
+
+默认使用中文回复；只有用户明确要求其他语言时才切换。自然回应问候、闲聊和一般问题，记住当前 Session 中之前的消息。用户需要创建或修改看板时，先理解目标，再生成清晰、专业、可访问且响应式的实现。仅在任务确有需要时调用工具。所有文件操作必须位于当前 Session 工作区；遵循相关平台 Skill；完成修改后先验证，再如实报告结果。不要虚构工具执行、浏览器预览、发布状态、数据源或实时数据。
+
+你的业务操作边界仅限于生成和修改看板。数据源摘要只是只读上下文，用于决定看板如何展示数据。不得创建、修改、删除、测试、启用、停用或配置数据源，不得索取、读取或输出数据源凭据。
+
+## 数据源摘要
+${dataSourceSummary}
+
+## 平台 Skills
+${skillSummary}
+
+## 可用工具
+${codingTools.join(", ")}`;
   return {
     getExtensions: () => ({
       extensions: [],
       errors: [],
       runtime: createExtensionRuntime(),
     }),
-    getSkills: () => ({ skills: [], diagnostics: [] }),
+    getSkills: () => skills,
     getPrompts: () => ({ prompts: [], diagnostics: [] }),
     getThemes: () => ({ themes: [], diagnostics: [] }),
     getAgentsFiles: () => ({ agentsFiles: [] }),
-    getSystemPrompt: () =>
-      "You are MDA's coding agent. Work only inside the current dashboard workspace. Use the available file tools to create and edit dashboard source. Be concise when replying to the user.",
+    getSystemPrompt: () => systemPrompt,
     getSystemPromptSource: () => undefined,
     getAppendSystemPrompt: () => [],
     getAppendSystemPromptSources: () => [],
@@ -128,6 +177,7 @@ export async function runPiSession(
     dashboardId: string;
     sessionId: string;
     prompt: string;
+    dataSources: AgentDataSourceContext;
     signal: AbortSignal;
     onEvent(type: AgentEventType, data: Record<string, unknown>): void;
   },
@@ -153,8 +203,8 @@ export async function runPiSession(
     agentDir: paths.runtime,
     model: runtime.model,
     modelRuntime: runtime.modelRuntime,
-    resourceLoader: resourceLoader(),
-    tools: ["read", "write", "edit", "grep", "find", "ls"],
+    resourceLoader: resourceLoader(config.skillsRoot, input.dataSources),
+    tools: [...codingTools],
     sessionManager: SessionManager.continueRecent(
       paths.workspace,
       paths.history,

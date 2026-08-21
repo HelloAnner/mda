@@ -31,10 +31,39 @@ export const SettleAgentJobRequestSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const AgentDataSourceSummarySchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1 }),
+    name: Type.String({ minLength: 1, maxLength: 200 }),
+    description: Type.Optional(Type.String({ maxLength: 2_000 })),
+    kind: Type.Union([Type.Literal("http"), Type.Literal("jdbc")]),
+    status: Type.Union([
+      Type.Literal("active"),
+      Type.Literal("disabled"),
+      Type.Literal("degraded"),
+    ]),
+    schemaRevision: Type.Integer({ minimum: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+export const AgentDataSourceContextSchema = Type.Object(
+  {
+    status: Type.Union([
+      Type.Literal("ready"),
+      Type.Literal("not-configured"),
+      Type.Literal("unavailable"),
+    ]),
+    items: Type.Array(AgentDataSourceSummarySchema),
+  },
+  { additionalProperties: false },
+);
+
 export const ClaimedAgentJobSchema = Type.Object(
   {
     job: AgentJobSchema,
     prompt: Type.String({ minLength: 1, maxLength: 20_000 }),
+    dataSources: AgentDataSourceContextSchema,
     lease: Type.Object(
       {
         owner: Type.String({ minLength: 1 }),
@@ -47,6 +76,12 @@ export const ClaimedAgentJobSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export type AgentDataSourceContext = Static<
+  typeof AgentDataSourceContextSchema
+>;
+export type AgentDataSourceSummary = Static<
+  typeof AgentDataSourceSummarySchema
+>;
 export type AgentLeaseCommand = Static<typeof AgentLeaseCommandSchema>;
 export type ClaimAgentJobRequest = Static<typeof ClaimAgentJobRequestSchema>;
 export type ClaimedAgentJob = Static<typeof ClaimedAgentJobSchema>;

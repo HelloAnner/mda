@@ -743,6 +743,10 @@ The Data Source Service verifies the grant and applies its own source, query, st
 
 ## 16. Agent Tool Integration
 
+A claimed Agent Job includes a credential-free Data Source context with service availability and authorized source summaries. This lets the Session system prompt distinguish “no sources configured” from a temporary outage before the Agent chooses a Tool. Full schema descriptions and exploration results remain on-demand rather than inflating every prompt.
+
+Moss never receives Data Source management operations. It may use authorized read-only discovery, schema description, and bounded exploration results to generate a dashboard, and may register a Dashboard Query through its dedicated contract; it cannot create, edit, delete, test, activate, enable, disable, or configure a Data Source.
+
 Agent Tools are adapters over the Data Source Service API:
 
 ```text

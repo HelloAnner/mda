@@ -117,6 +117,7 @@ integrationTest("enqueues and fences authoritative Agent work", async () => {
   expect(claim.status).toBe(200);
   const claimed = await claim.json();
   expect(claimed.prompt).toBe("Build a sales dashboard");
+  expect(claimed.dataSources).toEqual({ status: "not-configured", items: [] });
   expect(claimed.lease.fencingToken).toBe(1);
 
   const staleStart = await fetch(

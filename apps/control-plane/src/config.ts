@@ -60,6 +60,7 @@ const GlobalConfigFileSchema = Type.Object(
           internal_token_env: Type.Optional(EnvironmentNameSchema),
           control_plane_url: Type.Optional(Type.String({ minLength: 1 })),
           workspace_root: Type.Optional(Type.String({ minLength: 1 })),
+          skills_root: Type.Optional(Type.String({ minLength: 1 })),
           model: Type.Optional(
             Type.Object(
               {

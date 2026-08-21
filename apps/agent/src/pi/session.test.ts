@@ -25,13 +25,16 @@ test("isolates Session paths and rejects traversal", () => {
 test("streams a real Pi SDK session through the configured LLM API", async () => {
   let authorization: string | null = null;
   let requestPath = "";
+  const requestBodies: unknown[] = [];
   const llm = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
     async fetch(request) {
       authorization = request.headers.get("authorization");
       requestPath = new URL(request.url).pathname;
-      await request.json();
+      requestBodies.push(await request.json());
+      const reply =
+        requestBodies.length === 1 ? "Hello from MDA" : "Still here";
       const encoder = new TextEncoder();
       return new Response(
         new ReadableStream({
@@ -58,7 +61,7 @@ test("streams a real Pi SDK session through the configured LLM API", async () =>
                 choices: [
                   {
                     index: 0,
-                    delta: { content: "Hello from MDA" },
+                    delta: { content: reply },
                     finish_reason: null,
                   },
                 ],
@@ -89,6 +92,7 @@ test("streams a real Pi SDK session through the configured LLM API", async () =>
     controlPlaneUrl: "http://localhost:8080",
     redisUrl: "redis://localhost:6379",
     workspaceRoot,
+    skillsRoot: new URL("../../skills", import.meta.url).pathname,
     consumerId: "agent-test",
     leaseMs: 30_000,
     workers: 1,
@@ -106,12 +110,24 @@ test("streams a real Pi SDK session through the configured LLM API", async () =>
       dashboardId: "dashboard_1",
       sessionId: "session_1",
       prompt: "Say hello",
+      dataSources: { status: "not-configured", items: [] },
       signal: new AbortController().signal,
       onEvent: (type, data) => events.push({ type, data }),
     });
 
     expect(requestPath).toBe("/v1/chat/completions");
     expect(String(authorization)).toBe("Bearer test-model-key");
+    expect(JSON.stringify(requestBodies[0])).toContain(
+      "你是 Moss，一名专业的看板生成与编程助手",
+    );
+    expect(JSON.stringify(requestBodies[0])).toContain("dashboard-coding");
+    expect(JSON.stringify(requestBodies[0])).toContain("尚未配置数据源服务");
+    expect(JSON.stringify(requestBodies[0])).toContain(
+      "read, bash, write, edit, grep, find, ls",
+    );
+    expect(JSON.stringify(requestBodies[0])).toContain(
+      "不得创建、修改、删除、测试、启用、停用或配置数据源",
+    );
     expect(
       existsSync(
         join(
@@ -126,6 +142,24 @@ test("streams a real Pi SDK session through the configured LLM API", async () =>
         .map(({ data }) => data.text)
         .join(""),
     ).toBe("Hello from MDA");
+
+    const continuedEvents: typeof events = [];
+    await runPiSession(config, await createPiModelRuntime(config), {
+      dashboardId: "dashboard_1",
+      sessionId: "session_1",
+      prompt: "Are you still there?",
+      dataSources: { status: "not-configured", items: [] },
+      signal: new AbortController().signal,
+      onEvent: (type, data) => continuedEvents.push({ type, data }),
+    });
+    expect(JSON.stringify(requestBodies[1])).toContain("Say hello");
+    expect(JSON.stringify(requestBodies[1])).toContain("Hello from MDA");
+    expect(
+      continuedEvents
+        .filter(({ type }) => type === "assistant.delta")
+        .map(({ data }) => data.text)
+        .join(""),
+    ).toBe("Still here");
   } finally {
     llm.stop(true);
     rmSync(workspaceRoot, { recursive: true });
