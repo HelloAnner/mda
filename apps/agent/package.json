@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "bun src/worker.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@mda/contracts": "workspace:*",
     "@sinclair/typebox": "0.34.52"
   }
 }

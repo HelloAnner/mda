@@ -9,6 +9,27 @@ export const AgentJobStateSchema = Type.Union([
   Type.Literal("cancelled"),
 ]);
 
+export const AgentEventTypeSchema = Type.Union([
+  Type.Literal("agent.started"),
+  Type.Literal("assistant.delta"),
+  Type.Literal("assistant.completed"),
+  Type.Literal("tool.started"),
+  Type.Literal("tool.completed"),
+  Type.Literal("agent.failed"),
+  Type.Literal("agent.completed"),
+]);
+
+export const AgentEventSchema = Type.Object(
+  {
+    sequence: Type.Integer({ minimum: 1 }),
+    timestamp: Type.String({ minLength: 1 }),
+    type: AgentEventTypeSchema,
+    jobId: Type.String({ minLength: 1 }),
+    data: Type.Record(Type.String(), Type.Unknown()),
+  },
+  { $id: "AgentEventV1", additionalProperties: false },
+);
+
 export const AgentTerminalErrorSchema = Type.Object(
   {
     code: Type.String({ minLength: 1, maxLength: 100 }),
@@ -55,6 +76,8 @@ export const CreateAgentJobRequestSchema = Type.Object(
   { $id: "CreateAgentJobRequestV1", additionalProperties: false },
 );
 
+export type AgentEvent = Static<typeof AgentEventSchema>;
+export type AgentEventType = Static<typeof AgentEventTypeSchema>;
 export type AgentJob = Static<typeof AgentJobSchema>;
 export type AgentJobState = Static<typeof AgentJobStateSchema>;
 export type AgentSession = Static<typeof AgentSessionSchema>;

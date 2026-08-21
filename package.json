@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "agent": "bun run --filter @mda/agent start",
     "db:migrate": "bun run --filter @mda/control-plane db:migrate",
     "dev": "bun run --filter @mda/control-plane dev",
     "mda": "bun apps/cli/src/main.ts",

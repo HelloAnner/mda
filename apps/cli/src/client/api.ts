@@ -18,11 +18,11 @@ export class ApiClientError extends Error {
   }
 }
 
-export async function apiRequest(
+export async function apiFetch(
   config: ApiClientConfig,
   path: string,
   init: RequestInit = {},
-): Promise<unknown> {
+): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("x-mda-cli-version", config.version);
   headers.set("x-mda-contract-version", "1");
@@ -37,12 +37,19 @@ export async function apiRequest(
     ...init,
     headers,
   });
+  if (response.ok) return response;
+
   const body: unknown = await response.json();
-  if (!response.ok) {
-    if (Value.Check(ApiErrorSchema, body)) {
-      throw new ApiClientError(body, response.status);
-    }
-    throw new Error(`Control Plane returned HTTP ${response.status}`);
+  if (Value.Check(ApiErrorSchema, body)) {
+    throw new ApiClientError(body, response.status);
   }
-  return body;
+  throw new Error(`Control Plane returned HTTP ${response.status}`);
+}
+
+export async function apiRequest(
+  config: ApiClientConfig,
+  path: string,
+  init: RequestInit = {},
+): Promise<unknown> {
+  return (await apiFetch(config, path, init)).json();
 }

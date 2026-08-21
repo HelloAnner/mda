@@ -1,5 +1,6 @@
 import {
   AgentLeaseCommandSchema,
+  AppendAgentEventsRequestSchema,
   ClaimAgentJobRequestSchema,
   CreateAgentJobRequestSchema,
   SettleAgentJobRequestSchema,
@@ -17,11 +18,13 @@ import {
   requireIdempotencyKey,
 } from "../../shared/http.ts";
 import {
+  appendAgentEvents,
   cancelAgentJob,
   claimAgentJob,
   enqueueAgentJob,
   getAgentJob,
   heartbeatAgentJob,
+  listAgentEvents,
   settleAgentJob,
   startAgentJob,
 } from "./postgres.ts";
@@ -41,6 +44,66 @@ function decodeId(value: string): string {
   }
 }
 
+function agentEventStream(
+  request: Request,
+  dependencies: AgentWorkRouteDependencies,
+  tenantId: string,
+  jobId: string,
+  after: number,
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      void (async () => {
+        let cursor = after;
+        let lastKeepalive = Date.now();
+        try {
+          while (!request.signal.aborted) {
+            const events = await listAgentEvents(
+              dependencies.db,
+              tenantId,
+              jobId,
+              cursor,
+            );
+            for (const event of events) {
+              cursor = event.sequence;
+              controller.enqueue(
+                encoder.encode(
+                  `id: ${event.sequence}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+                ),
+              );
+            }
+            const job = await getAgentJob(dependencies.db, tenantId, jobId);
+            if (!job) break;
+            if (
+              events.length === 0 &&
+              ["succeeded", "failed", "cancelled"].includes(job.state)
+            ) {
+              break;
+            }
+            if (Date.now() - lastKeepalive >= 15_000) {
+              controller.enqueue(encoder.encode(": keepalive\n\n"));
+              lastKeepalive = Date.now();
+            }
+            // ponytail: bounded polling is enough for the first chat path; Redis wake-ups replace it at SSE scale.
+            await Bun.sleep(250);
+          }
+          controller.close();
+        } catch (error) {
+          controller.error(error);
+        }
+      })();
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+      "content-type": "text/event-stream",
+    },
+  });
+}
+
 export async function handleAgentWorkRequest(
   request: Request,
   dependencies: AgentWorkRouteDependencies,
@@ -50,10 +113,10 @@ export async function handleAgentWorkRequest(
     /^\/api\/dashboards\/([^/]+)\/messages$/,
   );
   const publicJobMatch = url.pathname.match(
-    /^\/api\/agent-jobs\/([^/]+)(\/cancel)?$/,
+    /^\/api\/agent-jobs\/([^/]+)(?:\/(cancel|events))?$/,
   );
   const internalMatch = url.pathname.match(
-    /^\/internal\/v1\/agent-jobs\/([^/]+)\/(claim|start|heartbeat|settle)$/,
+    /^\/internal\/v1\/agent-jobs\/([^/]+)\/(claim|start|heartbeat|events|settle)$/,
   );
   if (!messageMatch && !publicJobMatch && !internalMatch) return undefined;
 
@@ -79,7 +142,7 @@ export async function handleAgentWorkRequest(
     if (publicJobMatch) {
       const principal = await dependencies.authenticate(request);
       const jobId = decodeId(publicJobMatch[1] ?? "");
-      if (publicJobMatch[2] === "/cancel") {
+      if (publicJobMatch[2] === "cancel") {
         if (request.method !== "POST") {
           throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method not allowed");
         }
@@ -95,6 +158,23 @@ export async function handleAgentWorkRequest(
       const job = await getAgentJob(dependencies.db, principal.tenantId, jobId);
       if (!job) {
         throw new HttpError(404, "AGENT_JOB_NOT_FOUND", "Agent Job not found");
+      }
+      if (publicJobMatch[2] === "events") {
+        const rawCursor =
+          request.headers.get("last-event-id") ??
+          url.searchParams.get("after") ??
+          "0";
+        const cursor = Number(rawCursor);
+        if (!Number.isInteger(cursor) || cursor < 0) {
+          throw new HttpError(400, "VALIDATION_ERROR", "Invalid event cursor");
+        }
+        return agentEventStream(
+          request,
+          dependencies,
+          principal.tenantId,
+          jobId,
+          cursor,
+        );
       }
       return Response.json(job);
     }
@@ -137,6 +217,15 @@ export async function handleAgentWorkRequest(
           jobId,
           await readJson(request, AgentLeaseCommandSchema),
           leaseMs,
+        ),
+      );
+    }
+    if (action === "events") {
+      return Response.json(
+        await appendAgentEvents(
+          dependencies.db,
+          jobId,
+          await readJson(request, AppendAgentEventsRequestSchema),
         ),
       );
     }

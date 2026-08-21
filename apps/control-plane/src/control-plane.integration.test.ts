@@ -141,6 +141,19 @@ integrationTest("enqueues and fences authoritative Agent work", async () => {
     { method: "POST", headers: internalHeaders, body: command },
   );
   expect((await heartbeat.json()).state).toBe("running");
+  const appended = await fetch(
+    `${baseUrl}/internal/v1/agent-jobs/${queued.id}/events`,
+    {
+      method: "POST",
+      headers: internalHeaders,
+      body: JSON.stringify({
+        owner: "agent_1",
+        fencingToken: 1,
+        events: [{ type: "assistant.delta", data: { text: "hello" } }],
+      }),
+    },
+  );
+  expect((await appended.json())[0].sequence).toBe(1);
   const settled = await fetch(
     `${baseUrl}/internal/v1/agent-jobs/${queued.id}/settle`,
     {
@@ -159,6 +172,11 @@ integrationTest("enqueues and fences authoritative Agent work", async () => {
     headers: authorizedHeaders(),
   });
   expect((await visible.json()).state).toBe("succeeded");
+
+  const stream = await fetch(`${baseUrl}/api/agent-jobs/${queued.id}/events`, {
+    headers: authorizedHeaders(),
+  });
+  expect(await stream.text()).toContain('"text":"hello"');
 
   const [{ count }] = await db`
     SELECT count(*)::int AS count

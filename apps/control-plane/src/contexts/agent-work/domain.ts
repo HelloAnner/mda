@@ -44,6 +44,18 @@ function assertLease(
   }
 }
 
+export function assertActiveLease(
+  job: AgentJobAggregate,
+  owner: string,
+  fencingToken: number,
+  now: Date,
+): void {
+  if (job.state !== "leased" && job.state !== "running") {
+    throw new AgentJobTransitionError("JOB_NOT_ACTIVE", "Job is not active");
+  }
+  assertLease(job, owner, fencingToken, now);
+}
+
 export function claimJob(
   job: AgentJobAggregate,
   owner: string,
@@ -89,10 +101,7 @@ export function renewJobLease(
   now: Date,
   leaseMs: number,
 ): AgentJobAggregate {
-  if (job.state !== "leased" && job.state !== "running") {
-    throw new AgentJobTransitionError("JOB_NOT_ACTIVE", "Job is not active");
-  }
-  assertLease(job, owner, fencingToken, now);
+  assertActiveLease(job, owner, fencingToken, now);
   const candidate = new Date(now.getTime() + leaseMs).toISOString();
   return {
     ...job,

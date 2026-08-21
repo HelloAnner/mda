@@ -1,6 +1,8 @@
 import type {
+  AgentEvent,
   AgentJob,
   AgentLeaseCommand,
+  AppendAgentEventsRequest,
   ClaimedAgentJob,
   CreateAgentJobRequest,
   SettleAgentJobRequest,
@@ -11,6 +13,7 @@ import { claimIdempotency, requestDigest } from "../../shared/idempotency.ts";
 import {
   type AgentJobAggregate,
   AgentJobTransitionError,
+  assertActiveLease,
   claimJob,
   renewJobLease,
   requestJobCancellation,
@@ -423,4 +426,84 @@ export async function cancelAgentJob(
   } catch (error) {
     transitionError(error);
   }
+}
+
+export async function appendAgentEvents(
+  db: SQL,
+  id: string,
+  command: AppendAgentEventsRequest,
+  now = new Date(),
+): Promise<AgentEvent[]> {
+  try {
+    return await db.begin(async (transaction) => {
+      const jobRow = await lockedJob(transaction, id);
+      assertActiveLease(
+        toAggregate(jobRow),
+        command.owner,
+        command.fencingToken,
+        now,
+      );
+      const tenantRows = await transaction`
+        SELECT tenant_id FROM agent_jobs WHERE id = ${id}
+      `;
+      const tenantId = String((tenantRows[0] as Row).tenant_id);
+      const sequenceRows = await transaction`
+        SELECT COALESCE(max(sequence), 0)::int AS sequence
+        FROM agent_events
+        WHERE job_id = ${id}
+      `;
+      let sequence = Number((sequenceRows[0] as Row).sequence);
+      const created: AgentEvent[] = [];
+      for (const event of command.events) {
+        sequence += 1;
+        const rows = await transaction`
+          INSERT INTO agent_events (
+            id, tenant_id, job_id, sequence, type, data, created_at
+          ) VALUES (
+            ${`agent-event_${crypto.randomUUID()}`}, ${tenantId}, ${id},
+            ${sequence}, ${event.type}, ${JSON.stringify(event.data)}::jsonb,
+            ${now.toISOString()}
+          )
+          RETURNING sequence, created_at
+        `;
+        created.push({
+          sequence: Number((rows[0] as Row).sequence),
+          timestamp: new Date(
+            String((rows[0] as Row).created_at),
+          ).toISOString(),
+          type: event.type,
+          jobId: id,
+          data: event.data,
+        });
+      }
+      return created;
+    });
+  } catch (error) {
+    transitionError(error);
+  }
+}
+
+export async function listAgentEvents(
+  db: SQL,
+  tenantId: string,
+  id: string,
+  after: number,
+  limit = 100,
+): Promise<AgentEvent[]> {
+  const rows = await db`
+    SELECT sequence, type, data, created_at
+    FROM agent_events
+    WHERE tenant_id = ${tenantId} AND job_id = ${id} AND sequence > ${after}
+    ORDER BY sequence
+    LIMIT ${limit}
+  `;
+  return [...rows].map((row) => ({
+    sequence: Number(row.sequence),
+    timestamp: new Date(String(row.created_at)).toISOString(),
+    type: row.type as AgentEvent["type"],
+    jobId: id,
+    data: (typeof row.data === "string"
+      ? JSON.parse(row.data)
+      : row.data) as Record<string, unknown>,
+  }));
 }

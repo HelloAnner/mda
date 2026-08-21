@@ -4,14 +4,17 @@ import {
   type HealthResponse,
   type ServiceMetadata,
 } from "@mda/contracts";
-import type { SQL } from "bun";
+import { RedisClient, type SQL } from "bun";
 import packageJson from "../package.json" with { type: "json" };
 import { loadConfig } from "./config.ts";
+import { startAgentJobDispatcher } from "./contexts/agent-work/dispatch.ts";
 import { handleAgentWorkRequest } from "./contexts/agent-work/routes.ts";
 import { handleDashboardRequest } from "./contexts/dashboards/routes.ts";
 import {
   authorizeGlobalAccess,
   createAuthenticator,
+  createLocalAuthenticator,
+  ensureLocalPrincipal,
   type PrincipalContext,
 } from "./shared/auth.ts";
 import { createDatabase } from "./shared/db.ts";
@@ -35,6 +38,7 @@ interface ServerDependencies {
   internalAgentToken?: string;
   agentLeaseMs?: number;
   accessPassword?: string;
+  redis?: RedisClient;
 }
 
 export function startServer(
@@ -56,6 +60,7 @@ export function startServer(
         if (!dependencies) return Response.json(health);
         try {
           await dependencies.db`SELECT 1`;
+          if (dependencies.redis) await dependencies.redis.ping();
           return Response.json(health);
         } catch {
           return errorResponse(
@@ -110,12 +115,30 @@ export function startServer(
 if (import.meta.main) {
   const config = loadConfig();
   const db = createDatabase(config.databaseUrl);
+  const redis = new RedisClient(config.redisUrl);
+  await redis.connect();
+  startAgentJobDispatcher(db, redis);
+  if (config.authMode === "password") {
+    await ensureLocalPrincipal(db, config.localTenantId, config.localUserId);
+  }
+  const authenticate =
+    config.authMode === "password"
+      ? createLocalAuthenticator(db, config.localTenantId, config.localUserId)
+      : createAuthenticator(
+          {
+            oidcIssuer: config.oidcIssuer as string,
+            oidcAudience: config.oidcAudience as string,
+            oidcJwksUrl: config.oidcJwksUrl as string,
+          },
+          db,
+        );
   const server = startServer(config.port, config.hostname, {
     db,
-    authenticate: createAuthenticator(config, db),
+    authenticate,
     internalAgentToken: config.internalAgentToken,
     agentLeaseMs: config.agentLeaseMs,
     accessPassword: config.accessPassword,
+    redis,
   });
   console.log(
     JSON.stringify({

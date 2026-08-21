@@ -1,7 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import type { SQL } from "bun";
 import { createRemoteJWKSet, type JWTVerifyGetKey, jwtVerify } from "jose";
-import type { Config } from "../config.ts";
 import { HttpError } from "./http.ts";
 
 export interface PrincipalContext {
@@ -10,7 +9,11 @@ export interface PrincipalContext {
   permissions: string[];
 }
 
-type OidcConfig = Pick<Config, "oidcAudience" | "oidcIssuer" | "oidcJwksUrl">;
+interface OidcConfig {
+  oidcAudience: string;
+  oidcIssuer: string;
+  oidcJwksUrl: string;
+}
 
 export async function verifyAccessToken(
   token: string,
@@ -114,6 +117,54 @@ export function authorizeInternalRequest(
   if (!secretMatches(supplied, expectedToken)) {
     throw new HttpError(401, "UNAUTHENTICATED", "Invalid internal token");
   }
+}
+
+export async function ensureLocalPrincipal(
+  db: SQL,
+  tenantId: string,
+  userId: string,
+): Promise<void> {
+  await db.begin(async (transaction) => {
+    await transaction`
+      INSERT INTO tenants (id, display_name)
+      VALUES (${tenantId}, 'Local MDA')
+      ON CONFLICT (id) DO NOTHING
+    `;
+    await transaction`
+      INSERT INTO users (
+        id, oidc_issuer, oidc_subject, display_name
+      ) VALUES (${userId}, 'local-password', ${userId}, 'Local Administrator')
+      ON CONFLICT (id) DO NOTHING
+    `;
+    await transaction`
+      INSERT INTO memberships (tenant_id, user_id, permissions)
+      VALUES (
+        ${tenantId}, ${userId},
+        ARRAY['dashboard.create', 'dashboard.read', 'dashboard.edit']
+      )
+      ON CONFLICT (tenant_id, user_id) DO NOTHING
+    `;
+  });
+}
+
+export function createLocalAuthenticator(
+  db: SQL,
+  tenantId: string,
+  userId: string,
+) {
+  return async (request: Request): Promise<PrincipalContext> => {
+    const requestedTenant = request.headers.get("x-mda-tenant");
+    if (requestedTenant && requestedTenant !== tenantId) {
+      throw new HttpError(403, "FORBIDDEN", "Access denied");
+    }
+    const rows = await db`
+      SELECT permissions FROM memberships
+      WHERE tenant_id = ${tenantId} AND user_id = ${userId} AND status = 'active'
+    `;
+    const row = rows[0] as { permissions: string[] } | undefined;
+    if (!row) throw new HttpError(403, "FORBIDDEN", "Access denied");
+    return { tenantId, userId, permissions: row.permissions };
+  };
 }
 
 export function requirePermission(

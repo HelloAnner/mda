@@ -11,6 +11,7 @@ import {
 import { Value } from "@sinclair/typebox/value";
 import packageJson from "../package.json" with { type: "json" };
 import { ApiClientError, apiRequest } from "./client/api.ts";
+import { chat } from "./interactive/chat.ts";
 
 const help = `mda ${packageJson.version}
 
@@ -19,6 +20,7 @@ Usage:
 
 Commands:
   doctor
+  chat <dashboard-id>
   dashboard list [--limit <n>]
   dashboard create --name <name> [--description <text>] [--idempotency-key <key>]
   dashboard show <dashboard-id>
@@ -123,7 +125,10 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
     }
   }
 
-  if (parsed.positionals[0] !== "dashboard") {
+  if (
+    parsed.positionals[0] !== "dashboard" &&
+    parsed.positionals[0] !== "chat"
+  ) {
     console.error(`Unknown command: ${parsed.positionals.join(" ")}`);
     return 2;
   }
@@ -137,6 +142,15 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
   };
 
   try {
+    if (parsed.positionals[0] === "chat") {
+      if (parsed.positionals.length !== 2) {
+        console.error("chat requires a Dashboard ID");
+        return 2;
+      }
+      await chat(config, parsed.positionals[1] ?? "");
+      return 0;
+    }
+
     const action = parsed.positionals[1];
     if (action === "list" && parsed.positionals.length === 2) {
       const rawLimit = stringValue(parsed.values.limit) ?? "50";

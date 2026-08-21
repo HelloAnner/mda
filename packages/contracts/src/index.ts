@@ -1,5 +1,11 @@
 export { type ApiError, ApiErrorSchema } from "./errors.ts";
 export {
+  type AppendAgentEventsRequest,
+  AppendAgentEventsRequestSchema,
+  type PendingAgentEvent,
+  PendingAgentEventSchema,
+} from "./internal/agent/v1/events.ts";
+export {
   type AgentLeaseCommand,
   AgentLeaseCommandSchema,
   type ClaimAgentJobRequest,
@@ -10,6 +16,10 @@ export {
   SettleAgentJobRequestSchema,
 } from "./internal/agent/v1/jobs.ts";
 export {
+  type AgentEvent,
+  AgentEventSchema,
+  type AgentEventType,
+  AgentEventTypeSchema,
   type AgentJob,
   AgentJobSchema,
   type AgentJobState,

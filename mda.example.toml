@@ -7,6 +7,15 @@ access_password_env = "MDA_ACCESS_PASSWORD"
 [database]
 url_env = "DATABASE_URL"
 
+[redis]
+url_env = "REDIS_URL"
+
+[auth]
+mode = "password"
+tenant_id = "local"
+user_id = "local-admin"
+
+# Used when auth.mode = "oidc".
 [oidc]
 issuer = "https://identity.example"
 audience = "mda"
@@ -15,6 +24,8 @@ jwks_url = "https://identity.example/.well-known/jwks.json"
 [agent]
 lease_ms = 30000
 internal_token_env = "INTERNAL_AGENT_TOKEN"
+control_plane_url = "http://localhost:8080"
+workspace_root = "./var/agent"
 
 [agent.model]
 provider = "openai-compatible"

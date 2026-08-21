@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { Type } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
@@ -6,10 +7,18 @@ import { Value } from "@sinclair/typebox/value";
 const EnvironmentNameSchema = Type.String({ pattern: "^[A-Z][A-Z0-9_]*$" });
 const AgentFileSchema = Type.Object(
   {
+    redis: Type.Object(
+      { url_env: EnvironmentNameSchema },
+      { additionalProperties: false },
+    ),
     agent: Type.Object(
       {
-        lease_ms: Type.Optional(Type.Integer()),
+        lease_ms: Type.Optional(
+          Type.Integer({ minimum: 5_000, maximum: 300_000 }),
+        ),
         internal_token_env: EnvironmentNameSchema,
+        control_plane_url: Type.String({ minLength: 1 }),
+        workspace_root: Type.Optional(Type.String({ minLength: 1 })),
         model: Type.Object(
           {
             provider: Type.String({ minLength: 1 }),
@@ -29,6 +38,11 @@ const AgentFileSchema = Type.Object(
 
 export interface AgentConfig {
   internalAgentToken: string;
+  controlPlaneUrl: string;
+  redisUrl: string;
+  workspaceRoot: string;
+  consumerId: string;
+  leaseMs: number;
   model: {
     provider: string;
     model: string;
@@ -58,6 +72,7 @@ export function loadAgentConfig(
 
   const model = value.agent.model;
   const internalAgentToken = env[value.agent.internal_token_env] ?? "";
+  const redisUrl = env.REDIS_URL ?? env[value.redis.url_env] ?? "";
   const apiKey = model.api_key_env
     ? env[model.api_key_env]
     : model.api_key_file
@@ -73,6 +88,9 @@ export function loadAgentConfig(
   }
   if (!apiKey) {
     throw new Error("Invalid Agent configuration: model API key is missing");
+  }
+  if (!/^rediss?:\/\//.test(redisUrl)) {
+    throw new Error("Invalid Agent configuration: Redis URL is missing");
   }
 
   let baseUrl: URL;
@@ -92,8 +110,23 @@ export function loadAgentConfig(
     );
   }
 
+  const controlPlaneUrl = new URL(value.agent.control_plane_url);
+  if (
+    controlPlaneUrl.protocol !== "http:" &&
+    controlPlaneUrl.protocol !== "https:"
+  ) {
+    throw new Error(
+      "Invalid Agent configuration: control_plane_url must use HTTP(S)",
+    );
+  }
+
   return {
     internalAgentToken,
+    controlPlaneUrl: controlPlaneUrl.href.replace(/\/$/, ""),
+    redisUrl,
+    workspaceRoot: value.agent.workspace_root ?? "/workspace",
+    consumerId: env.MDA_AGENT_CONSUMER ?? `${hostname()}-${process.pid}`,
+    leaseMs: value.agent.lease_ms ?? 30_000,
     model: {
       provider: model.provider,
       model: model.model,

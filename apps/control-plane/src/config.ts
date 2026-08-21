@@ -22,6 +22,24 @@ const GlobalConfigFileSchema = Type.Object(
         { additionalProperties: false },
       ),
     ),
+    redis: Type.Optional(
+      Type.Object(
+        { url_env: Type.Optional(EnvironmentNameSchema) },
+        { additionalProperties: false },
+      ),
+    ),
+    auth: Type.Optional(
+      Type.Object(
+        {
+          mode: Type.Optional(
+            Type.Union([Type.Literal("oidc"), Type.Literal("password")]),
+          ),
+          tenant_id: Type.Optional(Type.String({ minLength: 1 })),
+          user_id: Type.Optional(Type.String({ minLength: 1 })),
+        },
+        { additionalProperties: false },
+      ),
+    ),
     oidc: Type.Optional(
       Type.Object(
         {
@@ -39,6 +57,8 @@ const GlobalConfigFileSchema = Type.Object(
             Type.Integer({ minimum: 5_000, maximum: 300_000 }),
           ),
           internal_token_env: Type.Optional(EnvironmentNameSchema),
+          control_plane_url: Type.Optional(Type.String({ minLength: 1 })),
+          workspace_root: Type.Optional(Type.String({ minLength: 1 })),
           model: Type.Optional(
             Type.Object(
               {
@@ -66,9 +86,13 @@ const ConfigSchema = Type.Object(
     hostname: Type.String({ minLength: 1 }),
     port: Type.Integer({ minimum: 1, maximum: 65_535 }),
     databaseUrl: Type.String({ pattern: "^postgres(ql)?://" }),
-    oidcIssuer: Type.String({ minLength: 1 }),
-    oidcAudience: Type.String({ minLength: 1 }),
-    oidcJwksUrl: Type.String({ minLength: 1 }),
+    redisUrl: Type.String({ pattern: "^rediss?://" }),
+    authMode: Type.Union([Type.Literal("oidc"), Type.Literal("password")]),
+    localTenantId: Type.String({ minLength: 1 }),
+    localUserId: Type.String({ minLength: 1 }),
+    oidcIssuer: Type.Optional(Type.String({ minLength: 1 })),
+    oidcAudience: Type.Optional(Type.String({ minLength: 1 })),
+    oidcJwksUrl: Type.Optional(Type.String({ minLength: 1 })),
     internalAgentToken: Type.String({ minLength: 32 }),
     agentLeaseMs: Type.Integer({ minimum: 5_000, maximum: 300_000 }),
     accessPassword: Type.String({ minLength: 16 }),
@@ -80,9 +104,13 @@ export interface Config {
   hostname: string;
   port: number;
   databaseUrl: string;
-  oidcIssuer: string;
-  oidcAudience: string;
-  oidcJwksUrl: string;
+  redisUrl: string;
+  authMode: "oidc" | "password";
+  localTenantId: string;
+  localUserId: string;
+  oidcIssuer?: string;
+  oidcAudience?: string;
+  oidcJwksUrl?: string;
   internalAgentToken: string;
   agentLeaseMs: number;
   accessPassword: string;
@@ -132,6 +160,7 @@ export function loadConfig(
   const path = env.MDA_CONFIG ?? "mda.toml";
   const file = readGlobalConfig(path, Boolean(env.MDA_CONFIG));
   const databaseUrlEnv = file.database?.url_env ?? "DATABASE_URL";
+  const redisUrlEnv = file.redis?.url_env ?? "REDIS_URL";
   const accessPasswordEnv =
     file.server?.access_password_env ?? "MDA_ACCESS_PASSWORD";
   const internalTokenEnv =
@@ -140,9 +169,19 @@ export function loadConfig(
     hostname: env.HOST ?? file.server?.host ?? "0.0.0.0",
     port: Number(env.PORT ?? file.server?.port ?? 8080),
     databaseUrl: env.DATABASE_URL ?? env[databaseUrlEnv] ?? "",
-    oidcIssuer: env.OIDC_ISSUER ?? file.oidc?.issuer ?? "",
-    oidcAudience: env.OIDC_AUDIENCE ?? file.oidc?.audience ?? "",
-    oidcJwksUrl: env.OIDC_JWKS_URL ?? file.oidc?.jwks_url ?? "",
+    redisUrl: env.REDIS_URL ?? env[redisUrlEnv] ?? "",
+    authMode: env.MDA_AUTH_MODE ?? file.auth?.mode ?? "oidc",
+    localTenantId: env.MDA_LOCAL_TENANT ?? file.auth?.tenant_id ?? "local",
+    localUserId: env.MDA_LOCAL_USER ?? file.auth?.user_id ?? "local-admin",
+    ...((env.OIDC_ISSUER ?? file.oidc?.issuer)
+      ? { oidcIssuer: env.OIDC_ISSUER ?? file.oidc?.issuer }
+      : {}),
+    ...((env.OIDC_AUDIENCE ?? file.oidc?.audience)
+      ? { oidcAudience: env.OIDC_AUDIENCE ?? file.oidc?.audience }
+      : {}),
+    ...((env.OIDC_JWKS_URL ?? file.oidc?.jwks_url)
+      ? { oidcJwksUrl: env.OIDC_JWKS_URL ?? file.oidc?.jwks_url }
+      : {}),
     internalAgentToken: env.INTERNAL_AGENT_TOKEN ?? env[internalTokenEnv] ?? "",
     agentLeaseMs: Number(env.AGENT_LEASE_MS ?? file.agent?.lease_ms ?? 30_000),
     accessPassword: env.MDA_ACCESS_PASSWORD ?? env[accessPasswordEnv] ?? "",
@@ -152,6 +191,12 @@ export function loadConfig(
     throw new Error(
       `Invalid configuration: ${validationErrors(ConfigSchema, config)}`,
     );
+  }
+  if (
+    config.authMode === "oidc" &&
+    (!config.oidcIssuer || !config.oidcAudience || !config.oidcJwksUrl)
+  ) {
+    throw new Error("Invalid configuration: OIDC settings are required");
   }
   return config;
 }
