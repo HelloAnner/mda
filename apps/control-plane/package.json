@@ -4,12 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "db:migrate": "bun src/migrate.ts",
     "dev": "bun --watch src/server.ts",
     "start": "bun src/server.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@mda/contracts": "workspace:*",
-    "@sinclair/typebox": "0.34.52"
+    "@sinclair/typebox": "0.34.52",
+    "jose": "6.2.9"
   }
 }

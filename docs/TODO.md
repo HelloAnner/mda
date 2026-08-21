@@ -29,19 +29,30 @@ This file tracks implementation status. The detailed contracts and architecture 
 - [x] Add contract and HTTP tests.
 - [x] Verify `bun run typecheck`, `bun run lint`, and `bun test`.
 
+### First Dashboard slice
+
+- [x] Validate required Control Plane startup configuration.
+- [x] Validate OIDC access tokens and resolve tenant membership from PostgreSQL.
+- [x] Add the first Control Plane migration and Bun SQL migration runner.
+- [x] Add versioned Dashboard create, list, and show contracts.
+- [x] Implement normalized tenant-unique Dashboard creation.
+- [x] Persist Dashboard, idempotency, audit, and outbox records transactionally.
+- [x] Add authenticated Dashboard create, list, and show APIs.
+- [x] Add `mda dashboard create`, `list`, and `show` commands.
+- [x] Add a PostgreSQL integration check for idempotency, constraints, auditing, outbox records, and tenant isolation.
+
 ## Next
 
-Implement the first authoritative Dashboard slice without an in-memory substitute:
+Continue the authoritative authoring and Agent Job path:
 
-- [ ] Add startup configuration validation.
-- [ ] Add separately owned Control Plane and Data Source PostgreSQL migrations and roles.
-- [ ] Add Control Plane PostgreSQL access through Bun SQL.
-- [ ] Expand public contracts for Dashboard create, list, and show operations.
-- [ ] Implement Dashboard domain creation and name normalization.
-- [ ] Persist Dashboard, audit, idempotency, and outbox records transactionally.
-- [ ] Expose authenticated Dashboard create, list, and show routes.
-- [ ] Add matching `mda dashboard create`, `list`, and `show` commands.
-- [ ] Add PostgreSQL integration tests for constraints and tenant isolation.
+- [ ] Add Data Source Service PostgreSQL migrations and its separate database role.
+- [ ] Add the Draft Checkpoint and Dashboard Revision contracts and migrations.
+- [ ] Implement immutable source artifact references and Query Bindings.
+- [ ] Add Agent Session and Agent Job contracts.
+- [ ] Implement the Agent Job lease and fencing-token domain transitions.
+- [ ] Persist Agent Job creation with idempotency and a transactional outbox event.
+- [ ] Dispatch queued Agent Jobs through Redis Streams.
+- [ ] Add durable Agent Event append and SSE replay.
 
 ## Not Done
 
@@ -52,9 +63,9 @@ Implement the first authoritative Dashboard slice without an in-memory substitut
 - [ ] Agent workspace and runnable worker.
 - [ ] Dashboard Runtime and Dashboard Template packages.
 - [ ] Versioned Dashboard, Session, Job, Agent Event, Data Access, Runtime, and integration-event contracts.
-- [ ] OIDC/JWT authentication, tenant membership, roles, and permissions.
-- [ ] Validated production configuration and secret-file loading.
-- [ ] PostgreSQL schemas, migrations, constraints, and separate service roles.
+- [ ] OIDC login flows and tenant/role administration beyond token and membership validation.
+- [ ] Production secret-file loading.
+- [ ] Remaining PostgreSQL schemas, migrations, constraints, and separate service roles.
 - [ ] Idempotency, audit, and transactional outbox primitives.
 - [ ] Redis Streams, event wake-ups, and outbox dispatch.
 - [ ] S3/MinIO artifact storage.
@@ -99,7 +110,7 @@ Implement the first authoritative Dashboard slice without an in-memory substitut
 
 ### CLI and Web feature parity
 
-- [ ] CLI contexts and OIDC login.
+- [ ] CLI contexts and OIDC login beyond `MDA_TOKEN` authentication.
 - [ ] Dashboard generation and continuous chat.
 - [ ] Session resume, fork, inspect, compact, and export.
 - [ ] Job watch, event replay, cancellation, retry, Tool inspection, errors, logs, and statistics.
@@ -122,6 +133,7 @@ Implement the first authoritative Dashboard slice without an in-memory substitut
 
 ```bash
 bun install
+bun run db:migrate
 bun run typecheck
 bun run lint
 bun test
