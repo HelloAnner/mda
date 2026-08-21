@@ -16,6 +16,7 @@ const AgentFileSchema = Type.Object(
         lease_ms: Type.Optional(
           Type.Integer({ minimum: 5_000, maximum: 300_000 }),
         ),
+        workers: Type.Optional(Type.Integer({ minimum: 1, maximum: 16 })),
         internal_token_env: EnvironmentNameSchema,
         control_plane_url: Type.String({ minLength: 1 }),
         workspace_root: Type.Optional(Type.String({ minLength: 1 })),
@@ -43,6 +44,7 @@ export interface AgentConfig {
   workspaceRoot: string;
   consumerId: string;
   leaseMs: number;
+  workers: number;
   model: {
     provider: string;
     model: string;
@@ -73,16 +75,19 @@ export function loadAgentConfig(
   const model = value.agent.model;
   const internalAgentToken = env[value.agent.internal_token_env] ?? "";
   const redisUrl = env.REDIS_URL ?? env[value.redis.url_env] ?? "";
-  const apiKey = model.api_key_env
-    ? env[model.api_key_env]
-    : model.api_key_file
+  const apiKeyEnvironment = env.MODEL_API_KEY_ENV ?? model.api_key_env;
+  const apiKeyFile = env.MODEL_API_KEY_FILE ?? model.api_key_file;
+  const apiKey =
+    env.MODEL_API_KEY ??
+    (apiKeyEnvironment ? env[apiKeyEnvironment] : undefined) ??
+    (apiKeyFile
       ? readFileSync(
-          isAbsolute(model.api_key_file)
-            ? model.api_key_file
-            : resolve(dirname(path), model.api_key_file),
+          isAbsolute(apiKeyFile)
+            ? apiKeyFile
+            : resolve(dirname(path), apiKeyFile),
           "utf8",
         ).trim()
-      : undefined;
+      : undefined);
   if (internalAgentToken.length < 32) {
     throw new Error("Invalid Agent configuration: internal token is missing");
   }
@@ -95,7 +100,7 @@ export function loadAgentConfig(
 
   let baseUrl: URL;
   try {
-    baseUrl = new URL(model.base_url);
+    baseUrl = new URL(env.MDA_MODEL_BASE_URL ?? model.base_url);
   } catch {
     throw new Error("Invalid Agent configuration: model base_url is invalid");
   }
@@ -110,7 +115,9 @@ export function loadAgentConfig(
     );
   }
 
-  const controlPlaneUrl = new URL(value.agent.control_plane_url);
+  const controlPlaneUrl = new URL(
+    env.CONTROL_PLANE_INTERNAL_URL ?? value.agent.control_plane_url,
+  );
   if (
     controlPlaneUrl.protocol !== "http:" &&
     controlPlaneUrl.protocol !== "https:"
@@ -120,16 +127,27 @@ export function loadAgentConfig(
     );
   }
 
+  const workers = Number(env.MDA_AGENT_WORKERS ?? value.agent.workers ?? 1);
+  if (!Number.isInteger(workers) || workers < 1 || workers > 16) {
+    throw new Error(
+      "Invalid Agent configuration: workers must be from 1 to 16",
+    );
+  }
+
   return {
     internalAgentToken,
     controlPlaneUrl: controlPlaneUrl.href.replace(/\/$/, ""),
     redisUrl,
-    workspaceRoot: value.agent.workspace_root ?? "/workspace",
+    workspaceRoot:
+      env.MDA_AGENT_WORKSPACE_ROOT ??
+      value.agent.workspace_root ??
+      "/workspace",
     consumerId: env.MDA_AGENT_CONSUMER ?? `${hostname()}-${process.pid}`,
     leaseMs: value.agent.lease_ms ?? 30_000,
+    workers,
     model: {
-      provider: model.provider,
-      model: model.model,
+      provider: env.MDA_MODEL_PROVIDER ?? model.provider,
+      model: env.MDA_MODEL ?? model.model,
       baseUrl: baseUrl.href.replace(/\/$/, ""),
       apiKey,
     },

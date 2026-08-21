@@ -74,6 +74,7 @@ test("streams a real Pi SDK session through the configured LLM API", async () =>
     workspaceRoot,
     consumerId: "agent-test",
     leaseMs: 30_000,
+    workers: 1,
     model: {
       provider: "mda-test",
       model: "test-model",

@@ -23,6 +23,7 @@ jwks_url = "https://identity.example/.well-known/jwks.json"
 
 [agent]
 lease_ms = 30000
+workers = 1
 internal_token_env = "INTERNAL_AGENT_TOKEN"
 control_plane_url = "http://localhost:8080"
 workspace_root = "./var/agent"

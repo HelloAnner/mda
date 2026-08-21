@@ -3,7 +3,7 @@ import {
   ControlPlaneError,
   createControlPlaneClient,
 } from "./clients/control-plane.ts";
-import { loadAgentConfig } from "./config.ts";
+import { type AgentConfig, loadAgentConfig } from "./config.ts";
 import { AgentEventForwarder } from "./events.ts";
 import { createPiModelRuntime, runPiSession } from "./pi/session.ts";
 import {
@@ -12,8 +12,17 @@ import {
   readAgentJob,
 } from "./queue.ts";
 
-export async function runWorker(): Promise<void> {
-  const config = loadAgentConfig();
+type PiModelRuntime = Awaited<ReturnType<typeof createPiModelRuntime>>;
+
+export async function runWorker(
+  config: AgentConfig,
+  piRuntime: PiModelRuntime,
+  workerNumber: number,
+): Promise<void> {
+  const consumerId =
+    config.workers === 1
+      ? config.consumerId
+      : `${config.consumerId}-${workerNumber}`;
   const redis = new RedisClient(config.redisUrl);
   await redis.connect();
   await ensureAgentGroup(redis);
@@ -21,22 +30,13 @@ export async function runWorker(): Promise<void> {
     config.controlPlaneUrl,
     config.internalAgentToken,
   );
-  const piRuntime = await createPiModelRuntime(config);
-
-  console.log(
-    JSON.stringify({
-      event: "agent.started",
-      consumerId: config.consumerId,
-      model: `${config.model.provider}/${config.model.model}`,
-    }),
-  );
 
   while (true) {
-    const entry = await readAgentJob(redis, config.consumerId);
+    const entry = await readAgentJob(redis, consumerId);
     if (!entry) continue;
     let acknowledge = false;
     try {
-      const claimed = await client.claim(entry.jobId, config.consumerId);
+      const claimed = await client.claim(entry.jobId, consumerId);
       const lease = {
         owner: claimed.lease.owner,
         fencingToken: claimed.lease.fencingToken,
@@ -168,4 +168,22 @@ function safeError(error: unknown, secret?: string): string {
   );
 }
 
-if (import.meta.main) await runWorker();
+export async function runWorkers(): Promise<void> {
+  const config = loadAgentConfig();
+  const piRuntime = await createPiModelRuntime(config);
+  console.log(
+    JSON.stringify({
+      event: "agent.started",
+      consumerId: config.consumerId,
+      workers: config.workers,
+      model: `${config.model.provider}/${config.model.model}`,
+    }),
+  );
+  await Promise.all(
+    Array.from({ length: config.workers }, (_, index) =>
+      runWorker(config, piRuntime, index + 1),
+    ),
+  );
+}
+
+if (import.meta.main) await runWorkers();

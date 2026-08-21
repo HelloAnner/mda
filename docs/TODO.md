@@ -69,8 +69,9 @@ This file tracks implementation status. The detailed contracts and architecture 
 - [x] Use an explicit empty ResourceLoader and a file-tool allowlist.
 - [x] Persist coalesced Agent events and replay them through SSE.
 - [x] Add continuous `mda chat <dashboard-id>` with multi-turn Session continuity.
-- [x] Deploy PostgreSQL 17.4, Redis 7.4, Main, and one Agent worker locally.
-- [x] Verify a real LLM chat, multi-turn memory, Tool events, and a Coding Agent file write through the deployed CLI.
+- [x] Build separate non-root `mda-main:0.1.0` and `mda-agent:0.1.0` images.
+- [x] Deploy PostgreSQL 17.4, Redis 7.4, one Main, and three Agent replicas through Compose.
+- [x] Verify real concurrent LLM chats, multi-turn memory, Tool events, and Coding Agent file writes with the literal `mda` CLI.
 
 ## Next
 
@@ -89,7 +90,7 @@ Continue the authoritative authoring and Agent Job path:
 
 - [ ] Management Web workspace and React/Vite application.
 - [ ] Data Source Service workspace and runnable service.
-- [ ] Hardened Agent image; the host-deployed worker is runnable.
+- [x] Separate non-root Main and Agent images with read-only container filesystems and dropped capabilities.
 - [ ] Dashboard Runtime and Dashboard Template packages.
 - [ ] Remaining Dashboard Revision, Agent Event, Data Access, Runtime, and integration-event contracts.
 - [ ] OIDC login flows and tenant/role administration beyond token and membership validation.
@@ -108,7 +109,7 @@ Continue the authoritative authoring and Agent Job path:
 - [ ] S3-backed Pi Session and workspace artifacts; local single-worker Session resume now works.
 - [ ] Persisted expired-lease recovery, immediate cancellation wake-ups, and Redis reclaim.
 - [x] Durable ordered Agent Events and SSE replay.
-- [ ] Independent hardened `mda-agent` image; the host worker currently consumes Redis.
+- [x] Independently scalable `mda-agent` image consuming Redis Streams.
 - [x] Pi SDK integration pinned to the reviewed version.
 - [x] Explicit Pi `ResourceLoader` and file Tool allowlist; platform Skills remain to add.
 - [ ] Agent Tools for source discovery, queries, validation, preview, and publishing.
@@ -167,9 +168,12 @@ bun run db:migrate
 bun run typecheck
 bun run lint
 bun test
+docker compose --env-file .env.local up -d --build --scale agent=3
+mda doctor
+mda chat <dashboard-id>
+
 bun run dev
 bun run agent
 bun run mda --help
-bun run mda chat <dashboard-id>
 bun run mda doctor
 ```

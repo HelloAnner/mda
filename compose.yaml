@@ -1,0 +1,142 @@
+name: mda
+
+services:
+  postgres:
+    image: postgres:17.4-alpine
+    environment:
+      POSTGRES_DB: mda
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mda"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [control-net]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    command: >-
+      sh -c 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [control-net, agent-net]
+    restart: unless-stopped
+
+  main-migrate:
+    image: mda-main:0.1.0
+    build:
+      context: .
+      dockerfile: docker/mda-main.Dockerfile
+    command: ["bun", "apps/control-plane/src/migrate.ts"]
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/mda
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [control-net]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
+  main:
+    image: mda-main:0.1.0
+    environment:
+      MDA_CONFIG: /app/mda.example.toml
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/mda
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      INTERNAL_AGENT_TOKEN: ${INTERNAL_AGENT_TOKEN:?set INTERNAL_AGENT_TOKEN}
+      MDA_ACCESS_PASSWORD: ${MDA_ACCESS_PASSWORD:?set MDA_ACCESS_PASSWORD}
+      MDA_AUTH_MODE: password
+      MDA_LOCAL_TENANT: local
+      MDA_LOCAL_USER: local-admin
+    depends_on:
+      main-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks: [edge-net, control-net, agent-net]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:size=128m,noexec,nosuid
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const r=await fetch('http://127.0.0.1:8080/health/ready');process.exit(r.ok?0:1)",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    init: true
+    restart: unless-stopped
+
+  agent:
+    image: mda-agent:0.1.0
+    build:
+      context: .
+      dockerfile: docker/mda-agent.Dockerfile
+    environment:
+      MDA_CONFIG: /app/mda.example.toml
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      INTERNAL_AGENT_TOKEN: ${INTERNAL_AGENT_TOKEN:?set INTERNAL_AGENT_TOKEN}
+      CONTROL_PLANE_INTERNAL_URL: http://main:8080
+      MDA_AGENT_WORKSPACE_ROOT: /workspace
+      MDA_AGENT_WORKERS: ${MDA_AGENT_WORKERS:-1}
+      MDA_MODEL_PROVIDER: mda-llm
+      MDA_MODEL: ${LLM_MODEL_NAME:?set LLM_MODEL_NAME}
+      MDA_MODEL_BASE_URL: ${LLM_BASE_URL:?set LLM_BASE_URL}
+      MODEL_API_KEY_FILE: /run/secrets/model_api_key
+    secrets: [model_api_key]
+    depends_on:
+      main:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - agent-workspace:/workspace
+    networks: [agent-net]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:size=512m,exec,nosuid
+      - /home/bun/.cache:size=512m,nosuid,uid=1000,gid=1000
+    pids_limit: 512
+    init: true
+    restart: unless-stopped
+
+networks:
+  edge-net: {}
+  control-net:
+    internal: true
+  agent-net: {}
+
+volumes:
+  postgres-data:
+    name: mda-postgres-data
+  redis-data:
+    name: mda-redis-data
+  agent-workspace:
+    name: mda-agent-workspace
+
+secrets:
+  model_api_key:
+    file: ${MDA_MODEL_API_KEY_FILE:-./var/secrets/model_api_key}
