@@ -98,6 +98,29 @@ function resourceLoader(): ResourceLoader {
   };
 }
 
+export function resolveSessionPaths(
+  workspaceRoot: string,
+  dashboardId: string,
+  sessionId: string,
+) {
+  const validSegment = /^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/;
+  if (!validSegment.test(dashboardId) || !validSegment.test(sessionId)) {
+    throw new Error("Invalid Agent workspace identifier");
+  }
+  const root = join(
+    workspaceRoot,
+    "dashboards",
+    dashboardId,
+    "sessions",
+    sessionId,
+  );
+  return {
+    workspace: join(root, "workspace"),
+    history: join(root, "history"),
+    runtime: join(root, "runtime"),
+  };
+}
+
 export async function runPiSession(
   config: AgentConfig,
   runtime: PiModelRuntime,
@@ -109,26 +132,33 @@ export async function runPiSession(
     onEvent(type: AgentEventType, data: Record<string, unknown>): void;
   },
 ): Promise<void> {
-  const cwd = join(config.workspaceRoot, "dashboards", input.dashboardId);
-  const sessionDir = join(config.workspaceRoot, "sessions", input.sessionId);
+  const paths = resolveSessionPaths(
+    config.workspaceRoot,
+    input.dashboardId,
+    input.sessionId,
+  );
   await Promise.all([
-    mkdir(cwd, { recursive: true }),
-    mkdir(sessionDir, { recursive: true }),
+    mkdir(paths.workspace, { recursive: true }),
+    mkdir(paths.history, { recursive: true }),
+    mkdir(paths.runtime, { recursive: true }),
   ]);
 
-  // ponytail: local session/workspace persistence supports one deployed worker; move snapshots to S3 before adding replicas.
+  // ponytail: the shared Docker volume is single-host durability; move snapshots to S3 before multi-host deployment.
   const settingsManager = SettingsManager.inMemory({
     compaction: { enabled: true },
     retry: { enabled: true, maxRetries: 2 },
   });
   const { session } = await createAgentSession({
-    cwd,
-    agentDir: join(config.workspaceRoot, ".runtime"),
+    cwd: paths.workspace,
+    agentDir: paths.runtime,
     model: runtime.model,
     modelRuntime: runtime.modelRuntime,
     resourceLoader: resourceLoader(),
     tools: ["read", "write", "edit", "grep", "find", "ls"],
-    sessionManager: SessionManager.continueRecent(cwd, sessionDir),
+    sessionManager: SessionManager.continueRecent(
+      paths.workspace,
+      paths.history,
+    ),
     settingsManager,
     thinkingLevel: "off",
   });

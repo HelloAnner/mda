@@ -209,10 +209,10 @@ JDBC operations are delegated through a protected internal protocol to an isolat
 - Redis Stream Job consumer.
 - The approved dashboard template and dependencies.
 - Platform-maintained Skills and custom Tools.
-- One temporary dashboard workspace per active Job.
+- One logical workspace and Pi history per active MDA Session.
 - Build and validation commands.
 
-Each Agent container runs one Job at a time, acquires and renews its authoritative lease through the Control Plane, and erases temporary workspace state before accepting another Job. It has no Control Plane database or Data Source credential and no Docker socket.
+Each Agent container runs a bounded pool of in-process workers. Every worker handles one Job at a time and renews its authoritative lease through the Control Plane, allowing three containers with eight workers each to run up to 24 conversations concurrently. Session-specific workspaces and Pi histories prevent accidental overlap; they are logical separation, not a hostile-code sandbox. The Agent has no Control Plane database or Data Source credential and no Docker socket.
 
 ### 7.6 PostgreSQL
 

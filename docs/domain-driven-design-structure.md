@@ -1206,7 +1206,7 @@ The Agent Worker is application and adapter code rather than an authoritative DD
 
 ```text
 apps/agent/src/
-├── worker.ts                         # Redis consume loop; one Job at a time
+├── worker.ts                         # Bounded in-process Redis consumer pool
 ├── run-job.ts                        # Restore, run, checkpoint, settle
 ├── lease.ts                          # Heartbeat and abort on lost lease
 ├── pi/

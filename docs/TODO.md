@@ -62,7 +62,7 @@ This file tracks implementation status. The detailed contracts and architecture 
 ### Core Coding Agent chat
 
 - [x] Dispatch queued Jobs from the PostgreSQL outbox through Redis Streams.
-- [x] Run an independent Redis-consuming `mda-agent` worker with one Job at a time.
+- [x] Run a bounded in-process Redis consumer pool; each worker handles one Job at a time.
 - [x] Import `@earendil-works/pi-coding-agent` `0.84.2` as an SDK dependency; no global Pi process or simulated CLI.
 - [x] Create or restore one independent Pi `AgentSession` and SessionManager file per MDA Session.
 - [x] Configure the OpenAI-compatible model endpoint and Agent-only API key from `mda.toml` references.
@@ -70,15 +70,17 @@ This file tracks implementation status. The detailed contracts and architecture 
 - [x] Persist coalesced Agent events and replay them through SSE.
 - [x] Add continuous `mda chat <dashboard-id>` with multi-turn Session continuity.
 - [x] Build separate non-root `mda-main:0.1.0` and `mda-agent:0.1.0` images.
-- [x] Deploy PostgreSQL 17.4, Redis 7.4, one Main, and three Agent replicas through Compose.
-- [x] Verify real concurrent LLM chats, multi-turn memory, Tool events, and Coding Agent file writes with the literal `mda` CLI.
+- [x] Deploy PostgreSQL 17.4, Redis 7.4, one Main, and three Agent replicas with eight workers each through Compose.
+- [x] Give every MDA Session validated, independent workspace/history/runtime paths.
+- [x] Verify concurrent same-dashboard Sessions cannot overwrite each other's files.
+- [x] Verify dozens-scale concurrent capacity, real LLM chats, multi-turn memory, Tool events, and Coding Agent file writes with the literal `mda` CLI.
 
 ## Next
 
 Continue the authoritative authoring and Agent Job path:
 
 - [ ] Add immutable Draft Checkpoints and Dashboard Revisions with artifact references and Query Bindings.
-- [ ] Move local Pi Session and workspace snapshots to S3/MinIO before adding Agent replicas.
+- [ ] Move shared-volume Pi Session and workspace snapshots to S3/MinIO before multi-host deployment.
 - [ ] Add the fixed React/Vite Dashboard Template and build/preview Tools.
 - [ ] Add the expired-lease recovery sweep and Redis pending-entry reclaim.
 - [ ] Add cancellation wake-ups that abort an active Pi Session immediately instead of on heartbeat.
@@ -106,7 +108,7 @@ Continue the authoritative authoring and Agent Job path:
 - [ ] Dashboard metadata CRUD and archive behavior.
 - [ ] Draft Checkpoints and immutable Dashboard Revisions.
 - [ ] Query Bindings owned by Dashboard Revisions.
-- [ ] S3-backed Pi Session and workspace artifacts; local single-worker Session resume now works.
+- [ ] S3-backed Pi Session and workspace artifacts; shared-volume multi-replica Session resume now works.
 - [ ] Persisted expired-lease recovery, immediate cancellation wake-ups, and Redis reclaim.
 - [x] Durable ordered Agent Events and SSE replay.
 - [x] Independently scalable `mda-agent` image consuming Redis Streams.

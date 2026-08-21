@@ -16,7 +16,7 @@ const AgentFileSchema = Type.Object(
         lease_ms: Type.Optional(
           Type.Integer({ minimum: 5_000, maximum: 300_000 }),
         ),
-        workers: Type.Optional(Type.Integer({ minimum: 1, maximum: 16 })),
+        workers: Type.Optional(Type.Integer({ minimum: 1, maximum: 64 })),
         internal_token_env: EnvironmentNameSchema,
         control_plane_url: Type.String({ minLength: 1 }),
         workspace_root: Type.Optional(Type.String({ minLength: 1 })),
@@ -128,9 +128,9 @@ export function loadAgentConfig(
   }
 
   const workers = Number(env.MDA_AGENT_WORKERS ?? value.agent.workers ?? 1);
-  if (!Number.isInteger(workers) || workers < 1 || workers > 16) {
+  if (!Number.isInteger(workers) || workers < 1 || workers > 64) {
     throw new Error(
-      "Invalid Agent configuration: workers must be from 1 to 16",
+      "Invalid Agent configuration: workers must be from 1 to 64",
     );
   }
 

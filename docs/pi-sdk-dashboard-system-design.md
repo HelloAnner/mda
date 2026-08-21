@@ -81,15 +81,18 @@ The Docker Compose deployment uses separate `mda-main` management and `mda-agent
 
 ## 4. Agent Worker
 
-Each dashboard should have an independent workspace and Pi Session:
+Each MDA Session should have an independent workspace and Pi Session:
 
 ```text
-/workspaces/{tenantId}/{dashboardId}/
+/workspaces/{tenantId}/{dashboardId}/sessions/{sessionId}/
+├── workspace/   # files editable by this conversation
+├── history/     # Pi Session JSONL
+└── runtime/     # Session-local Pi runtime files
 ```
 
 The Worker is responsible for:
 
-1. Creating or restoring the dashboard's `AgentSession`.
+1. Creating or restoring the MDA Session's `AgentSession`.
 2. Receiving user messages and calling `session.prompt()`.
 3. Subscribing to text, Tool calls, build progress, errors, and other events.
 4. Forwarding events to the management UI through SSE or WebSocket.
@@ -97,7 +100,7 @@ The Worker is responsible for:
 6. Calling controlled tools for data queries, builds, previews, and publishing.
 7. Saving Session state and an automatic Draft Checkpoint when a file-changing job finishes.
 
-An `AgentSession` must not be shared across tenants or dashboards. Concurrent modifications to the same dashboard should be serialized to prevent simultaneous writes to one workspace.
+An `AgentSession`, message history, and writable workspace must not be shared across MDA Sessions. Multiple conversations may run concurrently—even for one dashboard—because they edit separate Session workspaces. A later Draft Checkpoint or merge operation chooses which Session changes become authoritative Dashboard source.
 
 In production, the Agent Worker should run in a separate container, VM, or micro-VM rather than directly inside the management API process.
 

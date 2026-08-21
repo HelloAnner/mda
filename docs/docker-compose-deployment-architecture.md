@@ -86,7 +86,9 @@ It does not contain:
 - Host filesystem mounts.
 - Host Pi configuration or credentials.
 
-Each Agent container processes one Job at a time. Its writable workspace is temporary and is erased before another Job starts.
+Each Agent container runs a configurable pool of Coding Agent workers (`MDA_AGENT_WORKERS`, bounded to 1–64). Every worker processes one Job at a time, while the container can multiplex many conversations concurrently. Each MDA Session owns a separate Pi `AgentSession`, history directory, and logical workspace on the shared single-host Agent volume.
+
+Dashboard and Session IDs are validated as single path segments before these directories are resolved. Separate `workspace/`, `history/`, and `runtime/` subtrees prevent accidental file overlap but are not a security sandbox. The initial trusted single-host deployment intentionally defers hostile multi-tenant sandboxing; multi-host deployment requires moving Session snapshots to S3-compatible storage.
 
 ### 3.3 `mda-datasource`
 
@@ -260,7 +262,7 @@ Agent containers use a Redis consumer group:
 ```text
 stream: mda:agent-jobs
 consumer group: mda-agents
-consumer: unique container instance ID
+consumer: unique container-and-worker ID
 ```
 
 The stream payload contains only routing information:
@@ -442,8 +444,9 @@ The Agent image must not mount the host `~/.pi/agent` directory.
 - Do not mount host project paths.
 - Do not mount host SSH keys.
 - Do not mount Docker socket.
-- Process one Job at a time.
-- Erase workspace before accepting another Job.
+- Process one Job at a time per in-container worker.
+- Bound `MDA_AGENT_WORKERS` according to model, memory, and database capacity.
+- Keep every conversation in its own Session workspace.
 
 Docker Compose alone is not a hostile multi-tenant sandbox. Higher-risk deployments should launch one fresh container or micro-VM per Job. The independent `mda-agent` image is designed to support that later deployment mode.
 
@@ -675,6 +678,7 @@ services:
       CONTROL_PLANE_INTERNAL_URL: http://main:8080
       REDIS_URL_FILE: /run/secrets/redis_agent_url
       INTERNAL_AGENT_TOKEN_FILE: /run/secrets/internal_agent_token
+      MDA_AGENT_WORKERS: 8
       MODEL_API_KEY_FILE: /run/secrets/model_api_key
       S3_ENDPOINT: http://minio:9000
     secrets:
@@ -759,13 +763,13 @@ Readiness rules:
 
 ## 17. Scaling
 
-Scale Agent workers independently:
+Scale Agent capacity both within and across containers:
 
 ```bash
-docker compose up -d --scale agent=4
+MDA_AGENT_WORKERS=8 docker compose up -d --scale agent=3 agent
 ```
 
-Each replica uses a unique Redis consumer ID and runs one Job at a time.
+This example supports up to 24 active conversations. Each container-and-worker pair uses a unique Redis consumer ID and handles one Job at a time; additional Jobs remain durably queued.
 
 The initial Compose deployment runs one Main and one Data Source Service replica. Scaling those services requires an external load balancer and shared signing, PostgreSQL, Redis, and Object Storage configuration.
 

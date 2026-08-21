@@ -56,7 +56,7 @@ const GlobalConfigFileSchema = Type.Object(
           lease_ms: Type.Optional(
             Type.Integer({ minimum: 5_000, maximum: 300_000 }),
           ),
-          workers: Type.Optional(Type.Integer({ minimum: 1, maximum: 16 })),
+          workers: Type.Optional(Type.Integer({ minimum: 1, maximum: 64 })),
           internal_token_env: Type.Optional(EnvironmentNameSchema),
           control_plane_url: Type.Optional(Type.String({ minLength: 1 })),
           workspace_root: Type.Optional(Type.String({ minLength: 1 })),

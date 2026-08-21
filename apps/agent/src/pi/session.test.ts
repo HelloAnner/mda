@@ -1,9 +1,26 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentConfig } from "../config.ts";
-import { createPiModelRuntime, runPiSession } from "./session.ts";
+import {
+  createPiModelRuntime,
+  resolveSessionPaths,
+  runPiSession,
+} from "./session.ts";
+
+test("isolates Session paths and rejects traversal", () => {
+  const first = resolveSessionPaths("/workspace", "dashboard_1", "session_1");
+  const second = resolveSessionPaths("/workspace", "dashboard_1", "session_2");
+
+  expect(first.workspace).toBe(
+    "/workspace/dashboards/dashboard_1/sessions/session_1/workspace",
+  );
+  expect(second.workspace).not.toBe(first.workspace);
+  expect(() =>
+    resolveSessionPaths("/workspace", "dashboard_1", "../../escape"),
+  ).toThrow("Invalid Agent workspace identifier");
+});
 
 test("streams a real Pi SDK session through the configured LLM API", async () => {
   let authorization: string | null = null;
@@ -95,6 +112,14 @@ test("streams a real Pi SDK session through the configured LLM API", async () =>
 
     expect(requestPath).toBe("/v1/chat/completions");
     expect(String(authorization)).toBe("Bearer test-model-key");
+    expect(
+      existsSync(
+        join(
+          workspaceRoot,
+          "dashboards/dashboard_1/sessions/session_1/workspace",
+        ),
+      ),
+    ).toBe(true);
     expect(
       events
         .filter(({ type }) => type === "assistant.delta")
