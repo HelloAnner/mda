@@ -1,4 +1,5 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   createAgentSession,
@@ -12,6 +13,7 @@ import {
 import type {
   AgentDataSourceContext,
   AgentEventType,
+  AgentSessionArtifact,
   DashboardBuildArtifact,
   SourceSnapshot,
 } from "@mda/contracts";
@@ -208,23 +210,42 @@ export async function runPiSession(
     prompt: string;
     dataSources: AgentDataSourceContext;
     dataAccess?: DashboardDataAccess;
+    historyArtifact?: AgentSessionArtifact;
     workspaceSnapshot?: SourceSnapshot;
     signal: AbortSignal;
     onEvent(type: AgentEventType, data: Record<string, unknown>): void;
   },
-): Promise<{ previewArtifact?: DashboardBuildArtifact }> {
+): Promise<{
+  previewArtifact?: DashboardBuildArtifact;
+  historyArtifact?: AgentSessionArtifact;
+}> {
   const paths = resolveSessionPaths(
     config.workspaceRoot,
     input.dashboardId,
     input.sessionId,
   );
+  await rm(paths.history, { recursive: true, force: true });
   await Promise.all([
     mkdir(paths.history, { recursive: true }),
     mkdir(paths.runtime, { recursive: true }),
   ]);
+  if (input.historyArtifact) {
+    const bytes = Buffer.from(input.historyArtifact.content, "base64");
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    if (
+      bytes.length !== input.historyArtifact.bytes ||
+      digest !== input.historyArtifact.digest
+    ) {
+      throw new Error("Restored Agent Session history is inconsistent");
+    }
+    await writeFile(
+      join(paths.history, `restored-${input.historyArtifact.digest}.jsonl`),
+      bytes,
+      { mode: 0o600 },
+    );
+  }
   await restoreWorkspace(paths.workspace, input.workspaceSnapshot);
 
-  // ponytail: the shared Docker volume is single-host durability; move snapshots to S3 before multi-host deployment.
   const settingsManager = SettingsManager.inMemory({
     compaction: { enabled: true },
     retry: { enabled: true, maxRetries: 2 },
@@ -297,13 +318,29 @@ export async function runPiSession(
   const abort = () => void session.abort();
   input.signal.addEventListener("abort", abort, { once: true });
 
+  let sessionFile: string | undefined;
   try {
     await session.prompt(input.prompt);
     if (assistantError) throw new Error(assistantError);
+    sessionFile = session.sessionFile;
   } finally {
     input.signal.removeEventListener("abort", abort);
     unsubscribe();
     session.dispose();
   }
-  return previewArtifact ? { previewArtifact } : {};
+  if (!sessionFile) throw new Error("Pi Session history was not persisted");
+  const historyBytes = new Uint8Array(await readFile(sessionFile));
+  if (historyBytes.length > 20 * 1024 * 1024) {
+    throw new Error("Pi Session history is larger than 20 MiB");
+  }
+  const historyDigest = createHash("sha256").update(historyBytes).digest("hex");
+  const historyArtifact: AgentSessionArtifact = {
+    digest: historyDigest,
+    bytes: historyBytes.length,
+    content: Buffer.from(historyBytes).toString("base64"),
+  };
+  return {
+    ...(previewArtifact ? { previewArtifact } : {}),
+    historyArtifact,
+  };
 }

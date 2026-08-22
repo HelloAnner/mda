@@ -32,6 +32,14 @@ export {
   UploadPublicationResponseSchema,
 } from "./internal/agent/v1/publications.ts";
 export {
+  type AgentSessionArtifact,
+  AgentSessionArtifactSchema,
+  type UploadAgentSessionArtifactRequest,
+  UploadAgentSessionArtifactRequestSchema,
+  type UploadAgentSessionArtifactResponse,
+  UploadAgentSessionArtifactResponseSchema,
+} from "./internal/agent/v1/session-artifacts.ts";
+export {
   type AgentWorkspaceRestore,
   AgentWorkspaceRestoreSchema,
   type CheckpointAgentWorkspaceRequest,

@@ -131,7 +131,7 @@ This file tracks implementation status. The detailed contracts and architecture 
 Continue the backend distribution and data path:
 
 - [x] Add the isolated JVM JDBC Runner with a checksum-pinned PostgreSQL driver.
-- [ ] Move Pi Session history from the shared Agent volume to S3/MinIO before multi-host deployment.
+- [x] Move authoritative Pi Session history to S3/MinIO for cross-Job and multi-host restoration.
 - [x] Add the expired-lease recovery sweep and Redis pending-entry reclaim.
 - [ ] Add Redis cancellation wake-ups; active Pi Sessions now abort through one-second authoritative cancellation polling.
 - [ ] Add Data Source Service PostgreSQL migrations and its separate database role.
@@ -158,7 +158,7 @@ Continue the backend distribution and data path:
 - [x] Dashboard metadata create, list, show, optimistic update, and archive behavior.
 - [x] Draft Checkpoints and immutable Dashboard Revisions.
 - [x] Immutable Query Bindings owned by Publications; promote binding validation earlier into Dashboard Revision save when Query editing is added.
-- [ ] S3-backed Pi Session history; source workspaces now restore from MinIO Checkpoints.
+- [x] S3-backed Pi Session history and source workspaces restored from MinIO artifacts.
 - [ ] Redis cancellation wake-ups; persisted expired-lease recovery, one-second cancellation polling, and Redis reclaim now work.
 - [x] Durable ordered Agent Events and SSE replay.
 - [x] Independently scalable `mda-agent` image consuming Redis Streams.
@@ -166,7 +166,7 @@ Continue the backend distribution and data path:
 - [x] Explicit Pi `ResourceLoader`, Coding Tool allowlist, platform-maintained progressive Dashboard Skill catalog, and read-only Data Source summary prompt section.
 - [x] Restrict Moss's business operations to Dashboard generation; Data Source management stays outside its Tool boundary.
 - [ ] Agent publishing Tool; source discovery, registered Query, validation, and Preview Tools now work.
-- [ ] Pi history upload and retention cleanup; source restore, Checkpoint upload, clean build, Preview upload, and fenced settlement now work.
+- [ ] Artifact retention cleanup; Pi history/source restore, Session and Checkpoint upload, clean build, Preview upload, and fenced settlement now work.
 - [x] Immutable Preview build and sandboxed browser rendering.
 
 ### Data Access

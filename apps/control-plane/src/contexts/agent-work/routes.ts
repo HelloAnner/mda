@@ -5,6 +5,7 @@ import {
   ClaimAgentJobRequestSchema,
   CreateAgentJobRequestSchema,
   SettleAgentJobRequestSchema,
+  UploadAgentSessionArtifactRequestSchema,
 } from "@mda/contracts";
 import type { SQL } from "bun";
 import type { DataSourceClient } from "../../adapters/data-source-client.ts";
@@ -37,6 +38,10 @@ import {
   settleAgentJob,
   startAgentJob,
 } from "./postgres.ts";
+import {
+  loadAgentSessionArtifact,
+  storeAgentSessionArtifact,
+} from "./session-artifacts.ts";
 
 interface AgentWorkRouteDependencies {
   db: SQL;
@@ -142,7 +147,7 @@ export async function handleAgentWorkRequest(
     /^\/api\/agent-jobs\/([^/]+)(?:\/(cancel|events))?$/,
   );
   const internalMatch = url.pathname.match(
-    /^\/internal\/v1\/agent-jobs\/([^/]+)\/(claim|start|heartbeat|events|checkpoint|settle)$/,
+    /^\/internal\/v1\/agent-jobs\/([^/]+)\/(claim|start|heartbeat|events|checkpoint|session|settle)$/,
   );
   if (
     !messageMatch &&
@@ -287,15 +292,23 @@ export async function handleAgentWorkRequest(
           dataSources = { status: "unavailable", items: [] };
         }
       }
-      const workspace = await loadAgentWorkspace(
-        dependencies.db,
-        requireArtifacts(dependencies),
-        jobId,
-      );
+      const [workspace, history] = await Promise.all([
+        loadAgentWorkspace(
+          dependencies.db,
+          requireArtifacts(dependencies),
+          jobId,
+        ),
+        loadAgentSessionArtifact(
+          dependencies.db,
+          requireArtifacts(dependencies),
+          jobId,
+        ),
+      ]);
       return Response.json({
         ...claimed,
         dataSources,
         ...(workspace ? { workspace } : {}),
+        ...(history ? { history } : {}),
       });
     }
     if (action === "start") {
@@ -323,6 +336,21 @@ export async function handleAgentWorkRequest(
           dependencies.db,
           jobId,
           await readJson(request, AppendAgentEventsRequestSchema),
+        ),
+      );
+    }
+    if (action === "session") {
+      const input = await readJson(
+        request,
+        UploadAgentSessionArtifactRequestSchema,
+      );
+      return Response.json(
+        await storeAgentSessionArtifact(
+          dependencies.db,
+          requireArtifacts(dependencies),
+          jobId,
+          input,
+          input.artifact,
         ),
       );
     }

@@ -146,14 +146,18 @@ test("streams a real Pi SDK session through the configured LLM API", async () =>
   const events: Array<{ type: string; data: Record<string, unknown> }> = [];
 
   try {
-    await runPiSession(config, await createPiModelRuntime(config), {
-      dashboardId: "dashboard_1",
-      sessionId: "session_1",
-      prompt: "Say hello",
-      dataSources: { status: "not-configured", items: [] },
-      signal: new AbortController().signal,
-      onEvent: (type, data) => events.push({ type, data }),
-    });
+    const firstRun = await runPiSession(
+      config,
+      await createPiModelRuntime(config),
+      {
+        dashboardId: "dashboard_1",
+        sessionId: "session_1",
+        prompt: "Say hello",
+        dataSources: { status: "not-configured", items: [] },
+        signal: new AbortController().signal,
+        onEvent: (type, data) => events.push({ type, data }),
+      },
+    );
 
     expect(requestPath).toBe("/v1/chat/completions");
     expect(String(authorization)).toBe("Bearer test-model-key");
@@ -197,6 +201,7 @@ test("streams a real Pi SDK session through the configured LLM API", async () =>
       sessionId: "session_1",
       prompt: "Are you still there?",
       dataSources: { status: "not-configured", items: [] },
+      historyArtifact: firstRun.historyArtifact,
       signal: new AbortController().signal,
       onEvent: (type, data) => continuedEvents.push({ type, data }),
     });

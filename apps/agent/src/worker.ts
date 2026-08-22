@@ -1,4 +1,7 @@
-import type { DashboardBuildArtifact } from "@mda/contracts";
+import type {
+  AgentSessionArtifact,
+  DashboardBuildArtifact,
+} from "@mda/contracts";
 import { buildDashboard, DashboardBuildError } from "@mda/dashboard-template";
 import { RedisClient } from "bun";
 import {
@@ -79,6 +82,7 @@ export async function runWorker(
       const events = new AgentEventForwarder(client, entry.jobId, lease);
       try {
         let buildArtifact: DashboardBuildArtifact | undefined;
+        let historyArtifact: AgentSessionArtifact | undefined;
         if (claimed.job.purpose !== "edit") {
           if (
             !claimed.workspace ||
@@ -120,6 +124,7 @@ export async function runWorker(
             sessionId: claimed.job.sessionId,
             prompt: claimed.prompt,
             dataSources: claimed.dataSources,
+            ...(claimed.history ? { historyArtifact: claimed.history } : {}),
             dataAccess: {
               list: () => client.dataSources(entry.jobId, lease),
               describe: (sourceId) =>
@@ -143,11 +148,19 @@ export async function runWorker(
             onEvent: (type, data) => events.push(type, data),
           });
           buildArtifact = result.previewArtifact;
+          historyArtifact = result.historyArtifact;
         }
         if (leaseLost) throw new Error("Agent lease lost");
 
         const current = await client.heartbeat(entry.jobId, lease);
         cancellationRequested ||= Boolean(current.cancellationRequestedAt);
+        if (
+          !cancellationRequested &&
+          claimed.job.purpose === "edit" &&
+          historyArtifact
+        ) {
+          await client.sessionArtifact(entry.jobId, lease, historyArtifact);
+        }
         if (!cancellationRequested && claimed.job.purpose === "edit") {
           const workspace = resolveSessionPaths(
             config.workspaceRoot,

@@ -2,6 +2,7 @@ import type {
   AgentEvent,
   AgentJob,
   AgentLeaseCommand,
+  AgentSessionArtifact,
   AgentTerminalError,
   CheckpointAgentWorkspaceRequest,
   CheckpointAgentWorkspaceResponse,
@@ -15,6 +16,7 @@ import type {
   QueryResult,
   RegisteredQuery,
   RegisteredQueryListResponse,
+  UploadAgentSessionArtifactResponse,
   UploadDashboardPreviewResponse,
   UploadPublicationResponse,
 } from "@mda/contracts";
@@ -71,6 +73,16 @@ export function createControlPlaneClient(baseUrl: string, token: string) {
         `/internal/v1/agent-jobs/${encodeURIComponent(jobId)}/heartbeat`,
         command,
       ) as Promise<AgentJob>;
+    },
+    sessionArtifact(
+      jobId: string,
+      command: AgentLeaseCommand,
+      artifact: AgentSessionArtifact,
+    ) {
+      return request(
+        `/internal/v1/agent-jobs/${encodeURIComponent(jobId)}/session`,
+        { ...command, artifact },
+      ) as Promise<UploadAgentSessionArtifactResponse>;
     },
     checkpoint(jobId: string, command: CheckpointAgentWorkspaceRequest) {
       return request(

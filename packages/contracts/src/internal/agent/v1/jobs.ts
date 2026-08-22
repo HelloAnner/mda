@@ -3,6 +3,7 @@ import {
   AgentJobSchema,
   AgentTerminalErrorSchema,
 } from "../../../public/v1/agent-work.ts";
+import { AgentSessionArtifactSchema } from "./session-artifacts.ts";
 import { AgentWorkspaceRestoreSchema } from "./workspace.ts";
 
 export const ClaimAgentJobRequestSchema = Type.Object(
@@ -66,6 +67,7 @@ export const ClaimedAgentJobSchema = Type.Object(
     prompt: Type.String({ minLength: 1, maxLength: 20_000 }),
     dataSources: AgentDataSourceContextSchema,
     workspace: Type.Optional(AgentWorkspaceRestoreSchema),
+    history: Type.Optional(AgentSessionArtifactSchema),
     preview: Type.Optional(
       Type.Object(
         {
