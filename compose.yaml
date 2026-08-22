@@ -107,17 +107,44 @@ services:
     security_opt: ["no-new-privileges:true"]
     restart: "no"
 
+  jdbc-runner:
+    image: mda-jdbc-runner:0.1.0
+    build:
+      context: .
+      dockerfile: docker/mda-jdbc-runner.Dockerfile
+    environment:
+      JDBC_RUNNER_TOKEN: ${JDBC_RUNNER_TOKEN:?set JDBC_RUNNER_TOKEN}
+    networks: [control-net, data-net]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:size=128m,noexec,nosuid
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8082/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    init: true
+    restart: unless-stopped
+
   datasource:
     image: mda-datasource:0.1.0
     environment:
       DATA_SOURCE_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/mda
       DATA_SOURCE_INTERNAL_TOKEN: ${DATA_SOURCE_INTERNAL_TOKEN:?set DATA_SOURCE_INTERNAL_TOKEN}
+      JDBC_RUNNER_URL: http://jdbc-runner:8082
+      JDBC_RUNNER_TOKEN: ${JDBC_RUNNER_TOKEN:?set JDBC_RUNNER_TOKEN}
+      DATA_SOURCE_SECRETS_ROOT: /run/secrets
     depends_on:
       data-source-migrate:
         condition: service_completed_successfully
       data-fixture:
         condition: service_healthy
+      jdbc-runner:
+        condition: service_healthy
     networks: [control-net, data-net, connector-net]
+    secrets: [jdbc_fixture_username, jdbc_fixture_password]
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -272,3 +299,7 @@ volumes:
 secrets:
   model_api_key:
     file: ${MDA_MODEL_API_KEY_FILE:-./var/secrets/model_api_key}
+  jdbc_fixture_username:
+    file: ./var/secrets/jdbc_fixture_username
+  jdbc_fixture_password:
+    file: ./var/secrets/jdbc_fixture_password

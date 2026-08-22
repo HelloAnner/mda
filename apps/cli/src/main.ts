@@ -68,7 +68,7 @@ Commands:
   share show <share-link-id>
   share revoke <share-link-id>
   source list | show <id> | describe <id>
-  source add http --name <name> --config <json-file>
+  source add <http|jdbc> --name <name> --config <json-file>
   source rename <id> --name <name> --expected-version <n>
   source update <id> --config <json-file> --expected-version <n>
   source test | activate | enable | disable | delete | restore | refresh <id>
@@ -673,11 +673,14 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
         console.log(JSON.stringify(body, null, output === "json" ? 0 : 2));
         return 0;
       }
-      if (action === "add" && parsed.positionals[2] === "http") {
+      if (
+        action === "add" &&
+        ["http", "jdbc"].includes(parsed.positionals[2] ?? "")
+      ) {
         const name = stringValue(parsed.values.name);
         const configPath = stringValue(parsed.values.config);
         if (!name || !configPath) {
-          console.error("source add http requires --name and --config");
+          console.error("source add requires a kind, --name, and --config");
           return 2;
         }
         const file = (await readJsonFile(configPath)) as Record<
@@ -700,7 +703,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
             ...(stringValue(parsed.values.description)
               ? { description: stringValue(parsed.values.description) }
               : {}),
-            kind: "http",
+            kind: parsed.positionals[2],
             config: sourceConfig,
             ...(file && typeof file === "object" && Array.isArray(file.entities)
               ? { entities: file.entities }

@@ -27,6 +27,23 @@ export const HttpDataSourceConfigSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const JdbcDataSourceConfigSchema = Type.Object(
+  {
+    driverId: Type.Literal("postgresql"),
+    jdbcUrl: Type.String({
+      minLength: 1,
+      maxLength: 2_000,
+      pattern: "^jdbc:postgresql://",
+    }),
+    usernameRef: Type.String({ minLength: 1, maxLength: 200 }),
+    passwordRef: Type.String({ minLength: 1, maxLength: 200 }),
+    connectionTimeoutMs: Type.Integer({ minimum: 100, maximum: 30_000 }),
+    statementTimeoutMs: Type.Integer({ minimum: 100, maximum: 60_000 }),
+    maxRows: Type.Integer({ minimum: 1, maximum: 10_000 }),
+  },
+  { additionalProperties: false },
+);
+
 export const DataEntitySchema = Type.Object(
   {
     name: Type.String({ minLength: 1, maxLength: 200 }),
@@ -52,7 +69,7 @@ export const DataSourceSchema = Type.Object(
     id: Type.String({ minLength: 1 }),
     name: Type.String({ minLength: 1, maxLength: 200 }),
     description: Type.Optional(Type.String({ maxLength: 2_000 })),
-    kind: Type.Literal("http"),
+    kind: Type.Union([Type.Literal("http"), Type.Literal("jdbc")]),
     status: Type.Union([
       Type.Literal("draft"),
       Type.Literal("active"),
@@ -97,8 +114,11 @@ export const CreateDataSourceRequestSchema = Type.Object(
   {
     name: Type.String({ minLength: 1, maxLength: 200, pattern: "\\S" }),
     description: Type.Optional(Type.String({ maxLength: 2_000 })),
-    kind: Type.Literal("http"),
-    config: HttpDataSourceConfigSchema,
+    kind: Type.Union([Type.Literal("http"), Type.Literal("jdbc")]),
+    config: Type.Union([
+      HttpDataSourceConfigSchema,
+      JdbcDataSourceConfigSchema,
+    ]),
     entities: Type.Optional(Type.Array(DataEntitySchema, { maxItems: 100 })),
   },
   { additionalProperties: false },
@@ -115,7 +135,9 @@ export const RenameDataSourceRequestSchema = Type.Object(
 export const UpdateDataSourceRequestSchema = Type.Object(
   {
     description: Type.Optional(Type.String({ maxLength: 2_000 })),
-    config: Type.Optional(HttpDataSourceConfigSchema),
+    config: Type.Optional(
+      Type.Union([HttpDataSourceConfigSchema, JdbcDataSourceConfigSchema]),
+    ),
     entities: Type.Optional(Type.Array(DataEntitySchema, { maxItems: 100 })),
     expectedVersion: Type.Integer({ minimum: 1 }),
   },
@@ -173,6 +195,14 @@ export const HttpQueryOperationSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const JdbcQueryOperationSchema = Type.Object(
+  {
+    sql: Type.String({ minLength: 1, maxLength: 20_000 }),
+    readOnly: Type.Literal(true),
+  },
+  { additionalProperties: false },
+);
+
 export const RegisteredQuerySchema = Type.Object(
   {
     id: Type.String({ minLength: 1 }),
@@ -181,7 +211,7 @@ export const RegisteredQuerySchema = Type.Object(
     description: Type.Optional(Type.String({ maxLength: 2_000 })),
     revision: Type.Integer({ minimum: 1 }),
     status: Type.Union([Type.Literal("active"), Type.Literal("retired")]),
-    operation: HttpQueryOperationSchema,
+    operation: Type.Union([HttpQueryOperationSchema, JdbcQueryOperationSchema]),
     parameters: Type.Array(QueryParameterDefinitionSchema, { maxItems: 100 }),
     columns: Type.Array(
       Type.Object(
@@ -206,7 +236,7 @@ export const CreateRegisteredQueryRequestSchema = Type.Object(
     sourceId: Type.String({ minLength: 1, maxLength: 200 }),
     name: Type.String({ minLength: 1, maxLength: 200, pattern: "\\S" }),
     description: Type.Optional(Type.String({ maxLength: 2_000 })),
-    operation: HttpQueryOperationSchema,
+    operation: Type.Union([HttpQueryOperationSchema, JdbcQueryOperationSchema]),
     parameters: Type.Array(QueryParameterDefinitionSchema, { maxItems: 100 }),
     sampleParameters: Type.Optional(
       Type.Record(Type.String(), DataValueSchema),
@@ -271,6 +301,8 @@ export type DataSourceTestResult = Static<typeof DataSourceTestResultSchema>;
 export type ExecuteQueryRequest = Static<typeof ExecuteQueryRequestSchema>;
 export type HttpDataSourceConfig = Static<typeof HttpDataSourceConfigSchema>;
 export type HttpQueryOperation = Static<typeof HttpQueryOperationSchema>;
+export type JdbcDataSourceConfig = Static<typeof JdbcDataSourceConfigSchema>;
+export type JdbcQueryOperation = Static<typeof JdbcQueryOperationSchema>;
 export type QueryResult = Static<typeof QueryResultSchema>;
 export type RegisteredQuery = Static<typeof RegisteredQuerySchema>;
 export type RegisteredQueryListResponse = Static<

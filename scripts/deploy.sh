@@ -50,6 +50,7 @@ ensure_local_secrets() {
       printf 'MDA_PREVIEW_SIGNING_KEY=%s\n' "$(openssl rand -hex 32)"
       printf 'MDA_SHARE_SIGNING_KEY=%s\n' "$(openssl rand -hex 32)"
       printf 'DATA_SOURCE_INTERNAL_TOKEN=%s\n' "$(openssl rand -hex 32)"
+      printf 'JDBC_RUNNER_TOKEN=%s\n' "$(openssl rand -hex 32)"
       printf 'LLM_BASE_URL=%s\n' "${LLM_BASE_URL:-https://api.deepseek.com/v1}"
       printf 'LLM_MODEL_NAME=%s\n' "${LLM_MODEL_NAME:-deepseek-chat}"
     } >"$LOCAL_ENV"
@@ -76,6 +77,9 @@ ensure_local_secrets() {
   if ! grep -q '^DATA_SOURCE_INTERNAL_TOKEN=' "$LOCAL_ENV"; then
     printf 'DATA_SOURCE_INTERNAL_TOKEN=%s\n' "$(openssl rand -hex 32)" >>"$LOCAL_ENV"
   fi
+  if ! grep -q '^JDBC_RUNNER_TOKEN=' "$LOCAL_ENV"; then
+    printf 'JDBC_RUNNER_TOKEN=%s\n' "$(openssl rand -hex 32)" >>"$LOCAL_ENV"
+  fi
 
   mkdir -p var/secrets
   chmod 700 var/secrets
@@ -87,6 +91,10 @@ ensure_local_secrets() {
   # private parent directory protects the host copy; read permission lets the
   # non-root Agent read the mounted file inside its container.
   chmod 0444 var/secrets/model_api_key
+  chmod 0600 var/secrets/jdbc_fixture_username var/secrets/jdbc_fixture_password 2>/dev/null || true
+  printf 'postgres' >var/secrets/jdbc_fixture_username
+  awk -F= '$1 == "POSTGRES_PASSWORD" { sub(/^[^=]*=/, ""); print; exit }' "$LOCAL_ENV" >var/secrets/jdbc_fixture_password
+  chmod 0444 var/secrets/jdbc_fixture_username var/secrets/jdbc_fixture_password
   if [[ ! -s var/secrets/model_api_key ]]; then
     warn "model API key is empty; configure var/secrets/model_api_key before using Agent chat"
   fi
@@ -105,7 +113,8 @@ bootstrap_remote_secrets() {
     $1 == "S3_BUCKET" ||
     $1 == "MDA_PREVIEW_SIGNING_KEY" ||
     $1 == "MDA_SHARE_SIGNING_KEY" ||
-    $1 == "DATA_SOURCE_INTERNAL_TOKEN" { print }
+    $1 == "DATA_SOURCE_INTERNAL_TOKEN" ||
+    $1 == "JDBC_RUNNER_TOKEN" { print }
   ' "$LOCAL_ENV" | ssh "$SSH_HOST" \
     "while IFS= read -r line; do key=\"\${line%%=*}\"; grep -q \"^\${key}=\" '$REMOTE_DIR/.env' || printf '%s\\n' \"\$line\" >> '$REMOTE_DIR/.env'; done"
   ssh "$SSH_HOST" "chmod 0600 '$REMOTE_DIR/.env'"
@@ -119,7 +128,7 @@ bootstrap_remote_secrets() {
       <var/secrets/model_api_key
   fi
   ssh "$SSH_HOST" \
-    "chmod 700 '$REMOTE_DIR/var/secrets' && chmod 0444 '$REMOTE_DIR/var/secrets/model_api_key'"
+    "chmod 0600 '$REMOTE_DIR/var/secrets/jdbc_fixture_username' '$REMOTE_DIR/var/secrets/jdbc_fixture_password' 2>/dev/null || true; printf 'postgres' > '$REMOTE_DIR/var/secrets/jdbc_fixture_username' && awk -F= '\$1 == \"POSTGRES_PASSWORD\" { sub(/^[^=]*=/, \"\"); print; exit }' '$REMOTE_DIR/.env' > '$REMOTE_DIR/var/secrets/jdbc_fixture_password' && chmod 700 '$REMOTE_DIR/var/secrets' && chmod 0444 '$REMOTE_DIR/var/secrets/model_api_key' '$REMOTE_DIR/var/secrets/jdbc_fixture_username' '$REMOTE_DIR/var/secrets/jdbc_fixture_password'"
 }
 
 sync_sources() {

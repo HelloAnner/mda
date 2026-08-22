@@ -130,7 +130,7 @@ This file tracks implementation status. The detailed contracts and architecture 
 
 Continue the backend distribution and data path:
 
-- [ ] Add the isolated JVM JDBC Runner and allowlisted JDBC drivers.
+- [x] Add the isolated JVM JDBC Runner with a checksum-pinned PostgreSQL driver.
 - [ ] Move Pi Session history from the shared Agent volume to S3/MinIO before multi-host deployment.
 - [x] Add the expired-lease recovery sweep and Redis pending-entry reclaim.
 - [ ] Add Redis cancellation wake-ups; active Pi Sessions now abort through one-second authoritative cancellation polling.
@@ -172,14 +172,14 @@ Continue the backend distribution and data path:
 ### Data Access
 
 - [x] HTTP Data Source CRUD, rename, configuration revisions, test, activation, enable, disable, delete, restore, and schema refresh.
-- [ ] Secret-reference storage and resolution boundary.
+- [x] File-backed JDBC secret-reference resolution isolated to the Data Source Service and Runner channel.
 - [x] Presentation-neutral administrator-declared schema descriptions and health projection.
 - [x] HTTP JSON connector with host, private-address, redirect, timeout, and size protections.
 - [x] Registered Queries and immutable first Query Revisions.
 - [ ] Signed execution grants from Main to Data Source Service.
 - [x] Runtime query execution, parameter binding, limits, auditing, and structured errors.
-- [ ] Isolated JVM JDBC Runner and allowlisted drivers.
-- [ ] Read-only parameterized JDBC execution and value normalization.
+- [x] Isolated JVM JDBC Runner with an allowlisted PostgreSQL driver.
+- [x] Read-only parameterized JDBC execution, DML/DDL rejection, limits, rollback, and value normalization.
 
 ### Runtime, publishing, and sharing
 
@@ -204,8 +204,8 @@ Continue the backend distribution and data path:
 
 ### Deployment and hardening
 
-- [ ] JDBC Runner Dockerfile; separate Main, Agent, and Data Source images now work.
-- [ ] Complete Docker Compose topology with PostgreSQL, Redis, MinIO, networks, health checks, and secrets.
+- [x] Separate Main, Agent, Data Source, and isolated JDBC Runner Dockerfiles.
+- [x] Complete current Docker Compose topology with PostgreSQL, Redis, MinIO, Data Source, JDBC Runner, networks, health checks, and secrets.
 - [ ] Database migration and seed commands.
 - [ ] Container filesystem, process, capability, and network hardening.
 - [ ] Credential and sensitive-output redaction tests.
@@ -230,7 +230,7 @@ mda dashboard publish <dashboard-id> --revision <revision-id>
 mda publication list --dashboard <dashboard-id>
 mda publication download <publication-id> --output dashboard-bundle.tar.gz
 mda share create --publication <publication-id>
-mda source add http --name <name> --config source.json
+mda source add <http|jdbc> --name <name> --config source.json
 mda source test <source-id>
 mda source activate <source-id>
 mda query register --config query.json

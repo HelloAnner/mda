@@ -7,6 +7,9 @@ const ConfigSchema = Type.Object(
     port: Type.Integer({ minimum: 1, maximum: 65_535 }),
     databaseUrl: Type.String({ pattern: "^postgres(ql)?://" }),
     internalToken: Type.String({ minLength: 32 }),
+    jdbcRunnerUrl: Type.String({ pattern: "^https?://" }),
+    jdbcRunnerToken: Type.String({ minLength: 32 }),
+    secretsRoot: Type.String({ minLength: 1 }),
   },
   { additionalProperties: false },
 );
@@ -21,6 +24,9 @@ export function loadDataSourceConfig(
     port: Number(env.PORT ?? 8081),
     databaseUrl: env.DATA_SOURCE_DATABASE_URL ?? env.DATABASE_URL ?? "",
     internalToken: env.DATA_SOURCE_INTERNAL_TOKEN ?? "",
+    jdbcRunnerUrl: env.JDBC_RUNNER_URL ?? "http://localhost:8082",
+    jdbcRunnerToken: env.JDBC_RUNNER_TOKEN ?? "",
+    secretsRoot: env.DATA_SOURCE_SECRETS_ROOT ?? "/run/secrets",
   };
   if (!Value.Check(ConfigSchema, value)) {
     const errors = [...Value.Errors(ConfigSchema, value)]

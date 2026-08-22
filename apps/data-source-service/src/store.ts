@@ -8,6 +8,7 @@ import type {
   DataSourceTestResult,
   ExecuteQueryRequest,
   HttpDataSourceConfig,
+  JdbcDataSourceConfig,
   QueryResult,
   RegisteredQuery,
   RenameDataSourceRequest,
@@ -19,6 +20,11 @@ import {
   inferColumns,
   testHttpSource,
 } from "./http-connector.ts";
+import {
+  executeJdbcQuery,
+  type JdbcConnectorConfig,
+  testJdbcSource,
+} from "./jdbc-connector.ts";
 
 export class DataAccessError extends Error {
   constructor(
@@ -55,7 +61,7 @@ function toSource(row: Row): DataSource {
     ...(row.description === null || row.description === undefined
       ? {}
       : { description: String(row.description) }),
-    kind: "http",
+    kind: row.kind as DataSource["kind"],
     status: row.status as DataSource["status"],
     health: row.health as DataSource["health"],
     configRevision: Number(row.latest_config_revision),
@@ -191,7 +197,7 @@ export async function createSource(
           id, tenant_id, name, normalized_name, description, kind, status,
           health, latest_config_revision, version, created_by, created_at, updated_at
         ) VALUES (${id}, ${tenantId}, ${name.name}, ${name.normalized},
-          ${input.description?.trim() || null}, 'http', 'draft', 'unknown', 1, 1,
+          ${input.description?.trim() || null}, ${input.kind}, 'draft', 'unknown', 1, 1,
           ${actorId}, ${now}, ${now})
         RETURNING id, name, description, kind, status, health,
           latest_config_revision, latest_schema_revision, version,
@@ -257,7 +263,7 @@ async function sourceConfig(
   activeOnly = false,
 ): Promise<{
   source: DataSource;
-  config: HttpDataSourceConfig;
+  config: HttpDataSourceConfig | JdbcDataSourceConfig;
   entities: DataEntity[];
   state: string;
 }> {
@@ -405,6 +411,7 @@ export async function updateSource(
 
 export async function testSource(
   db: SQL,
+  jdbc: JdbcConnectorConfig,
   tenantId: string,
   actorId: string,
   requestId: string,
@@ -413,7 +420,10 @@ export async function testSource(
   const value = await sourceConfig(db, tenantId, id);
   const checkedAt = new Date().toISOString();
   try {
-    const { latencyMs } = await testHttpSource(value.config);
+    const { latencyMs } =
+      value.source.kind === "jdbc"
+        ? await testJdbcSource(jdbc, value.config as JdbcDataSourceConfig)
+        : await testHttpSource(value.config as HttpDataSourceConfig);
     const result: DataSourceTestResult = {
       sourceId: id,
       configRevision: value.source.configRevision,
@@ -621,6 +631,7 @@ async function activeQueryRows(
 
 export async function registerQuery(
   db: SQL,
+  jdbc: JdbcConnectorConfig,
   tenantId: string,
   actorId: string,
   requestId: string,
@@ -643,12 +654,22 @@ export async function registerQuery(
     parameters: input.parameters,
     columns: [],
   };
-  const result = await executeHttpQuery(
-    source.config,
-    preliminary,
-    input.sampleParameters ?? {},
-  );
-  const columns = inferColumns(result.rows);
+  const result =
+    source.source.kind === "jdbc"
+      ? await executeJdbcQuery(
+          jdbc,
+          source.config as JdbcDataSourceConfig,
+          preliminary,
+          input.sampleParameters ?? {},
+        )
+      : await executeHttpQuery(
+          source.config as HttpDataSourceConfig,
+          preliminary,
+          input.sampleParameters ?? {},
+        );
+  const columns = result.meta.columns.length
+    ? result.meta.columns
+    : inferColumns(result.rows);
   const id = `query_${crypto.randomUUID()}`;
   const name = normalizedName(input.name);
   const now = new Date().toISOString();
@@ -730,6 +751,7 @@ export async function getQuery(
 
 export async function executeQuery(
   db: SQL,
+  jdbc: JdbcConnectorConfig,
   tenantId: string,
   actorId: string,
   id: string,
@@ -761,11 +783,19 @@ export async function executeQuery(
   }
   const started = performance.now();
   try {
-    const result = await executeHttpQuery(
-      source.config,
-      query,
-      input.parameters,
-    );
+    const result =
+      source.source.kind === "jdbc"
+        ? await executeJdbcQuery(
+            jdbc,
+            source.config as JdbcDataSourceConfig,
+            query,
+            input.parameters,
+          )
+        : await executeHttpQuery(
+            source.config as HttpDataSourceConfig,
+            query,
+            input.parameters,
+          );
     await db`
       INSERT INTO query_execution_audit (
         id, tenant_id, actor_id, query_id, query_revision, row_count,

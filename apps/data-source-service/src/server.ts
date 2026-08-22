@@ -9,6 +9,7 @@ import {
 import { Value } from "@sinclair/typebox/value";
 import { SQL } from "bun";
 import { loadDataSourceConfig } from "./config.ts";
+import type { JdbcConnectorConfig } from "./jdbc-connector.ts";
 import {
   activateSource,
   createSource,
@@ -122,6 +123,7 @@ function decode(value: string): string {
 export function startDataSourceServer(
   db: SQL,
   internalToken: string,
+  jdbc: JdbcConnectorConfig,
   port: number,
   hostname: string,
 ) {
@@ -239,6 +241,7 @@ export function startDataSourceServer(
             return Response.json(
               await testSource(
                 db,
+                jdbc,
                 principal.tenantId,
                 principal.actorId,
                 principal.requestId,
@@ -297,6 +300,7 @@ export function startDataSourceServer(
         if (queryCollection && request.method === "POST") {
           const result = await registerQuery(
             db,
+            jdbc,
             principal.tenantId,
             principal.actorId,
             principal.requestId,
@@ -325,6 +329,7 @@ export function startDataSourceServer(
             return Response.json(
               await executeQuery(
                 db,
+                jdbc,
                 principal.tenantId,
                 principal.actorId,
                 id,
@@ -348,6 +353,11 @@ if (import.meta.main) {
   const server = startDataSourceServer(
     db,
     config.internalToken,
+    {
+      runnerUrl: config.jdbcRunnerUrl,
+      runnerToken: config.jdbcRunnerToken,
+      secretsRoot: config.secretsRoot,
+    },
     config.port,
     config.hostname,
   );
