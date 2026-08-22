@@ -13,6 +13,7 @@ import { handleDashboardRequest } from "./contexts/dashboards/routes.ts";
 import { handlePreviewRequest } from "./contexts/previews/routes.ts";
 import { handlePublicationRequest } from "./contexts/publications/routes.ts";
 import { handleRevisionRequest } from "./contexts/revisions/routes.ts";
+import { handleShareRequest } from "./contexts/shares/routes.ts";
 import { type ArtifactStore, S3ArtifactStore } from "./shared/artifacts.ts";
 import {
   authorizeGlobalAccess,
@@ -46,6 +47,7 @@ interface ServerDependencies {
   artifacts?: ArtifactStore;
   previewSigningKey?: string;
   previewTtlSeconds?: number;
+  shareSigningKey?: string;
 }
 
 export function startServer(
@@ -97,6 +99,8 @@ export function startServer(
             );
           }
         }
+        const shareResponse = await handleShareRequest(request, dependencies);
+        if (shareResponse) return shareResponse;
         const publicationResponse = await handlePublicationRequest(
           request,
           dependencies,
@@ -173,6 +177,7 @@ if (import.meta.main) {
     artifacts,
     previewSigningKey: config.previewSigningKey,
     previewTtlSeconds: config.previewTtlSeconds,
+    shareSigningKey: config.shareSigningKey,
   });
   console.log(
     JSON.stringify({

@@ -6,6 +6,7 @@ import { parseArgs } from "node:util";
 import {
   CreateDashboardPreviewResponseSchema,
   CreatePublicationResponseSchema,
+  CreateShareLinkResponseSchema,
   type Dashboard,
   DashboardListResponseSchema,
   DashboardPreviewSchema,
@@ -20,6 +21,8 @@ import {
   PublicationSchema,
   type ServiceMetadata,
   ServiceMetadataSchema,
+  ShareLinkListResponseSchema,
+  ShareLinkSchema,
 } from "@mda/contracts";
 import { Value } from "@sinclair/typebox/value";
 import packageJson from "../package.json" with { type: "json" };
@@ -48,6 +51,10 @@ Commands:
   publication list --dashboard <dashboard-id> [--limit <n>]
   publication show <publication-id>
   publication download <publication-id> [--output <path>] [--force]
+  share create --publication <publication-id> [--expires <duration>]
+  share list --dashboard <dashboard-id> [--limit <n>]
+  share show <share-link-id>
+  share revoke <share-link-id>
 
 Global options:
   --api-url <url>  Control Plane URL
@@ -62,6 +69,19 @@ Environment:
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
+}
+
+function parseDuration(value: string): number | undefined {
+  const match = value.match(/^(\d+)([mhd])$/);
+  if (!match) return undefined;
+  const amount = Number(match[1]);
+  const multiplier = { m: 60, h: 3_600, d: 86_400 }[
+    match[2] as "m" | "h" | "d"
+  ];
+  const seconds = amount * multiplier;
+  return Number.isSafeInteger(seconds) && seconds >= 60 && seconds <= 31_536_000
+    ? seconds
+    : undefined;
 }
 
 function printDashboard(dashboard: Dashboard): void {
@@ -116,6 +136,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
         "api-url": { type: "string" },
         dashboard: { type: "string" },
         description: { type: "string" },
+        expires: { type: "string" },
         force: { type: "boolean" },
         help: { type: "boolean", short: "h" },
         "idempotency-key": { type: "string" },
@@ -123,6 +144,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
         message: { type: "string" },
         name: { type: "string" },
         output: { type: "string" },
+        publication: { type: "string" },
         revision: { type: "string" },
         tenant: { type: "string" },
         version: { type: "boolean", short: "V" },
@@ -190,6 +212,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
     parsed.positionals[0] !== "dashboard" &&
     parsed.positionals[0] !== "revision" &&
     parsed.positionals[0] !== "publication" &&
+    parsed.positionals[0] !== "share" &&
     parsed.positionals[0] !== "chat"
   ) {
     console.error(`Unknown command: ${parsed.positionals.join(" ")}`);
@@ -378,6 +401,123 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
 
       console.error(
         `Unknown publication command: ${parsed.positionals.slice(1).join(" ")}`,
+      );
+      return 2;
+    }
+
+    if (parsed.positionals[0] === "share") {
+      if (action === "create" && parsed.positionals.length === 2) {
+        const publicationId = stringValue(parsed.values.publication);
+        if (!publicationId) {
+          console.error("share create requires --publication");
+          return 2;
+        }
+        const rawExpires = stringValue(parsed.values.expires);
+        const expiresInSeconds = rawExpires
+          ? parseDuration(rawExpires)
+          : undefined;
+        if (rawExpires && !expiresInSeconds) {
+          console.error("--expires must be between 1m and 365d");
+          return 2;
+        }
+        const body = await apiRequest(
+          config,
+          `/api/publications/${encodeURIComponent(publicationId)}/share-links`,
+          {
+            method: "POST",
+            headers: {
+              "idempotency-key":
+                stringValue(parsed.values["idempotency-key"]) ??
+                crypto.randomUUID(),
+            },
+            body: JSON.stringify({
+              ...(expiresInSeconds ? { expiresInSeconds } : {}),
+            }),
+          },
+        );
+        if (!Value.Check(CreateShareLinkResponseSchema, body)) {
+          throw new Error("Control Plane returned invalid Share Link data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else console.log(body.url);
+        return 0;
+      }
+
+      if (action === "list" && parsed.positionals.length === 2) {
+        const dashboardId = stringValue(parsed.values.dashboard);
+        if (!dashboardId) {
+          console.error("share list requires --dashboard");
+          return 2;
+        }
+        const rawLimit = stringValue(parsed.values.limit) ?? "50";
+        const limit = Number(rawLimit);
+        if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+          console.error("--limit must be an integer between 1 and 100");
+          return 2;
+        }
+        const body = await apiRequest(
+          config,
+          `/api/dashboards/${encodeURIComponent(dashboardId)}/share-links?limit=${limit}`,
+        );
+        if (!Value.Check(ShareLinkListResponseSchema, body)) {
+          throw new Error("Control Plane returned invalid Share Link data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else {
+          for (const link of body.items) {
+            console.log(
+              [
+                link.id,
+                link.publicationId,
+                link.status,
+                link.expiresAt ?? "-",
+                link.createdAt,
+              ].join("\t"),
+            );
+          }
+        }
+        return 0;
+      }
+
+      if (action === "show" && parsed.positionals.length === 3) {
+        const body = await apiRequest(
+          config,
+          `/api/share-links/${encodeURIComponent(parsed.positionals[2] ?? "")}`,
+        );
+        if (!Value.Check(ShareLinkSchema, body)) {
+          throw new Error("Control Plane returned invalid Share Link data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else {
+          console.log(
+            [
+              body.id,
+              body.publicationId,
+              body.status,
+              body.expiresAt ?? "-",
+              body.createdAt,
+            ].join("\t"),
+          );
+        }
+        return 0;
+      }
+
+      if (action === "revoke" && parsed.positionals.length === 3) {
+        const body = await apiRequest(
+          config,
+          `/api/share-links/${encodeURIComponent(parsed.positionals[2] ?? "")}/revoke`,
+          { method: "POST", body: JSON.stringify({}) },
+        );
+        if (!Value.Check(ShareLinkSchema, body)) {
+          throw new Error("Control Plane returned invalid Share Link data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else console.log(`${body.id}\t${body.status}`);
+        return 0;
+      }
+
+      console.error(
+        `Unknown share command: ${parsed.positionals.slice(1).join(" ")}`,
       );
       return 2;
     }

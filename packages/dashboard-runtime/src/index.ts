@@ -77,7 +77,10 @@ export const dashboard = {
       locale: typeof navigator === "undefined" ? "en" : navigator.language,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
       theme: dark ? "dark" : "light",
-      mode: "preview",
+      mode:
+        typeof location !== "undefined" && location.pathname.startsWith("/s/")
+          ? "published"
+          : "preview",
     };
   },
 

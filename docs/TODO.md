@@ -106,11 +106,19 @@ This file tracks implementation status. The detailed contracts and architecture 
 - [x] Add Dashboard publish plus Publication list, show, and download CLI flows.
 - [x] Verify publish, metadata, exact bundle download, and deployment durability against `moss-dev-2`.
 
+### Public Share Links
+
+- [x] Add opaque, digest-only, idempotent Share Link tokens bound to immutable Publications.
+- [x] Add bounded expiry, final revocation, tenant-scoped metadata, audit, and outbox records.
+- [x] Directly serve published `index.html` and relative assets from `/s/<token>/`.
+- [x] Apply strict CSP, sandboxing, MIME allowlisting, path validation, no-referrer, and cache policy.
+- [x] Add Share create, list, show, and revoke CLI flows.
+- [x] Verify direct delivery, token tampering, digest-only storage, idempotency, and immediate revocation against `moss-dev-2`.
+
 ## Next
 
 Continue the backend distribution and data path:
 
-- [ ] Add hashed, expiring, revocable Share Links that directly serve one immutable Publication.
 - [ ] Bind immutable Query Revisions to Dashboard Revisions.
 - [ ] Move Pi Session history from the shared Agent volume to S3/MinIO before multi-host deployment.
 - [ ] Add the expired-lease recovery sweep and Redis pending-entry reclaim.
@@ -169,7 +177,7 @@ Continue the backend distribution and data path:
 - [ ] Viewer Host and validated iframe message protocol.
 - [x] Immutable Preview and Publication artifacts.
 - [ ] Clean build, validation, and browser smoke-test pipeline.
-- [ ] Authenticated, public-live, and snapshot Share Links.
+- [ ] Authenticated, public-live, and snapshot Share Link modes; revocable public static Publication links now work.
 - [ ] Authorization-safe query caching and invalidation, if load requires it.
 
 ### CLI and Web feature parity

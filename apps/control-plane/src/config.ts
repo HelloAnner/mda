@@ -40,6 +40,12 @@ const GlobalConfigFileSchema = Type.Object(
         { additionalProperties: false },
       ),
     ),
+    share: Type.Optional(
+      Type.Object(
+        { signing_key_env: Type.Optional(EnvironmentNameSchema) },
+        { additionalProperties: false },
+      ),
+    ),
     preview: Type.Optional(
       Type.Object(
         {
@@ -132,6 +138,7 @@ const ConfigSchema = Type.Object(
     accessPassword: Type.String({ minLength: 16 }),
     previewSigningKey: Type.String({ minLength: 32 }),
     previewTtlSeconds: Type.Integer({ minimum: 60, maximum: 86_400 }),
+    shareSigningKey: Type.String({ minLength: 32 }),
   },
   { additionalProperties: false },
 );
@@ -157,6 +164,7 @@ export interface Config {
   accessPassword: string;
   previewSigningKey: string;
   previewTtlSeconds: number;
+  shareSigningKey: string;
 }
 
 function validationErrors(schema: typeof ConfigSchema, value: unknown): string {
@@ -214,6 +222,8 @@ export function loadConfig(
     file.agent?.internal_token_env ?? "INTERNAL_AGENT_TOKEN";
   const previewSigningKeyEnv =
     file.preview?.signing_key_env ?? "MDA_PREVIEW_SIGNING_KEY";
+  const shareSigningKeyEnv =
+    file.share?.signing_key_env ?? "MDA_SHARE_SIGNING_KEY";
   const config = {
     hostname: env.HOST ?? file.server?.host ?? "0.0.0.0",
     port: Number(env.PORT ?? file.server?.port ?? 8080),
@@ -247,6 +257,7 @@ export function loadConfig(
     previewTtlSeconds: Number(
       env.MDA_PREVIEW_TTL_SECONDS ?? file.preview?.ttl_seconds ?? 3_600,
     ),
+    shareSigningKey: env.MDA_SHARE_SIGNING_KEY ?? env[shareSigningKeyEnv] ?? "",
   };
 
   if (!Value.Check(ConfigSchema, config)) {

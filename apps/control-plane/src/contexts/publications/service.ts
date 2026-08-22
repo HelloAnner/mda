@@ -125,6 +125,19 @@ async function readPublicationBundle(
   }
 }
 
+export async function readPublicationFile(
+  artifacts: ArtifactStore,
+  publication: PublicationRecord,
+  path: string,
+): Promise<{ bytes: Uint8Array; mediaType: string }> {
+  const bundle = await readPublicationBundle(artifacts, publication);
+  const file = bundle.files.find((candidate) => candidate.path === path);
+  if (!file) {
+    throw new HttpError(404, "PUBLICATION_FILE_NOT_FOUND", "Not found");
+  }
+  return { bytes: file.bytes, mediaType: file.mediaType };
+}
+
 export async function exportPublicationBundle(
   artifacts: ArtifactStore,
   publication: PublicationRecord,

@@ -279,6 +279,53 @@ test("dashboard publish waits for an immutable Publication", async () => {
   }
 });
 
+test("share create returns a direct public Publication URL", async () => {
+  let requestBody: unknown;
+  const shareLink = {
+    id: "share_1",
+    dashboardId: "dashboard_1",
+    publicationId: "publication_1",
+    access: "public",
+    status: "active",
+    version: 1,
+    expiresAt: "2026-08-29T00:00:00.000Z",
+    createdAt: "2026-08-22T00:00:00.000Z",
+  };
+  const url = "https://mda.example/s/opaque-token/";
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      requestBody = await request.json();
+      return Response.json({ shareLink, url }, { status: 201 });
+    },
+  });
+
+  try {
+    const subprocess = Bun.spawn(
+      [
+        process.execPath,
+        new URL("./main.ts", import.meta.url).pathname,
+        "--api-url",
+        `http://127.0.0.1:${server.port}`,
+        "share",
+        "create",
+        "--publication",
+        "publication_1",
+        "--expires",
+        "7d",
+      ],
+      { stderr: "pipe", stdout: "pipe" },
+    );
+    expect(await subprocess.exited).toBe(0);
+    expect((await new Response(subprocess.stdout).text()).trim()).toBe(url);
+    expect(await new Response(subprocess.stderr).text()).toBe("");
+    expect(requestBody).toEqual({ expiresInSeconds: 604_800 });
+  } finally {
+    server.stop(true);
+  }
+});
+
 test("dashboard create sends tenant auth and renders the result", async () => {
   let received: Request | undefined;
   let receivedBody: unknown;

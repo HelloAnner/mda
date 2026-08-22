@@ -21,6 +21,9 @@ secret_key_env = "S3_SECRET_ACCESS_KEY"
 signing_key_env = "MDA_PREVIEW_SIGNING_KEY"
 ttl_seconds = 3600
 
+[share]
+signing_key_env = "MDA_SHARE_SIGNING_KEY"
+
 [auth]
 mode = "password"
 tenant_id = "local"

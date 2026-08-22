@@ -114,6 +114,16 @@ export {
   DashboardRevisionSchema,
 } from "./public/v1/revisions.ts";
 export {
+  type CreateShareLinkRequest,
+  CreateShareLinkRequestSchema,
+  type CreateShareLinkResponse,
+  CreateShareLinkResponseSchema,
+  type ShareLink,
+  type ShareLinkListResponse,
+  ShareLinkListResponseSchema,
+  ShareLinkSchema,
+} from "./public/v1/share-links.ts";
+export {
   CONTRACT_VERSION,
   type HealthResponse,
   HealthResponseSchema,
