@@ -5,6 +5,7 @@ import {
   UploadPublicationRequestSchema,
 } from "@mda/contracts";
 import type { SQL } from "bun";
+import type { DataSourceClient } from "../../adapters/data-source-client.ts";
 import type { ArtifactStore } from "../../shared/artifacts.ts";
 import {
   authorizeInternalRequest,
@@ -35,6 +36,7 @@ interface PublicationRouteDependencies {
   artifacts?: ArtifactStore;
   authenticate(request: Request): Promise<PrincipalContext>;
   internalAgentToken?: string;
+  dataSources?: DataSourceClient;
 }
 
 function decode(value: string, label: string): string {
@@ -120,6 +122,7 @@ export async function handlePublicationRequest(
         await storePublicationArtifact(
           dependencies.db,
           requireArtifacts(dependencies),
+          dependencies.dataSources,
           decode(internalMatch[1] ?? "", "Agent Job ID"),
           input,
           input.artifact,

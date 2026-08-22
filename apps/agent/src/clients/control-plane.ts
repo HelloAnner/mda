@@ -6,8 +6,15 @@ import type {
   CheckpointAgentWorkspaceRequest,
   CheckpointAgentWorkspaceResponse,
   ClaimedAgentJob,
+  CreateRegisteredQueryRequest,
   DashboardBuildArtifact,
+  DataSourceDescription,
+  DataSourceListResponse,
+  ExecuteQueryRequest,
   PendingAgentEvent,
+  QueryResult,
+  RegisteredQuery,
+  RegisteredQueryListResponse,
   UploadDashboardPreviewResponse,
   UploadPublicationResponse,
 } from "@mda/contracts";
@@ -70,6 +77,50 @@ export function createControlPlaneClient(baseUrl: string, token: string) {
         `/internal/v1/agent-jobs/${encodeURIComponent(jobId)}/checkpoint`,
         command,
       ) as Promise<CheckpointAgentWorkspaceResponse>;
+    },
+    dataSources(jobId: string, command: AgentLeaseCommand) {
+      return request(
+        `/internal/v1/agent-jobs/${encodeURIComponent(jobId)}/data-sources`,
+        command,
+      ) as Promise<DataSourceListResponse>;
+    },
+    describeSource(
+      jobId: string,
+      command: AgentLeaseCommand,
+      sourceId: string,
+    ) {
+      return request(
+        `/internal/v1/agent-jobs/${encodeURIComponent(jobId)}/describe-source`,
+        { ...command, sourceId },
+      ) as Promise<DataSourceDescription>;
+    },
+    queries(jobId: string, command: AgentLeaseCommand, sourceId?: string) {
+      return request(
+        `/internal/v1/agent-jobs/${encodeURIComponent(jobId)}/queries`,
+        { ...command, ...(sourceId ? { sourceId } : {}) },
+      ) as Promise<RegisteredQueryListResponse>;
+    },
+    registerQuery(
+      jobId: string,
+      command: AgentLeaseCommand,
+      input: CreateRegisteredQueryRequest,
+      idempotencyKey: string,
+    ) {
+      return request(
+        `/internal/v1/agent-jobs/${encodeURIComponent(jobId)}/register-query`,
+        { ...command, request: input, idempotencyKey },
+      ) as Promise<RegisteredQuery>;
+    },
+    executeQuery(
+      jobId: string,
+      command: AgentLeaseCommand,
+      queryId: string,
+      input: ExecuteQueryRequest,
+    ) {
+      return request(
+        `/internal/v1/agent-jobs/${encodeURIComponent(jobId)}/execute-query`,
+        { ...command, queryId, request: input },
+      ) as Promise<QueryResult>;
     },
     publication(
       jobId: string,

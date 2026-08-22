@@ -77,6 +77,18 @@ export async function createShareLink(
         "Publication not found",
       );
     }
+    const blockedBindings = await transaction`
+      SELECT 1 FROM publication_query_bindings
+      WHERE publication_id = ${publicationId} AND public_execution = FALSE
+      LIMIT 1
+    `;
+    if (blockedBindings.length) {
+      throw new HttpError(
+        409,
+        "PUBLIC_QUERY_NOT_APPROVED",
+        "Publication contains a Query that is not approved for public execution",
+      );
+    }
     const replayId = await claimIdempotency(transaction, {
       tenantId: principal.tenantId,
       operation,

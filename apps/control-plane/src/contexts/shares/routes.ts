@@ -1,5 +1,10 @@
-import { CreateShareLinkRequestSchema, type ShareLink } from "@mda/contracts";
+import {
+  CreateShareLinkRequestSchema,
+  ExecuteQueryRequestSchema,
+  type ShareLink,
+} from "@mda/contracts";
 import type { SQL } from "bun";
+import type { DataSourceClient } from "../../adapters/data-source-client.ts";
 import type { ArtifactStore } from "../../shared/artifacts.ts";
 import { type PrincipalContext, requirePermission } from "../../shared/auth.ts";
 import {
@@ -8,7 +13,10 @@ import {
   readJson,
   requireIdempotencyKey,
 } from "../../shared/http.ts";
-import { getPublication } from "../publications/postgres.ts";
+import {
+  getPublication,
+  getPublicationQueryBinding,
+} from "../publications/postgres.ts";
 import { readPublicationFile } from "../publications/service.ts";
 import {
   createShareLink,
@@ -25,6 +33,7 @@ interface ShareRouteDependencies {
   artifacts?: ArtifactStore;
   authenticate(request: Request): Promise<PrincipalContext>;
   shareSigningKey?: string;
+  dataSources?: DataSourceClient;
 }
 
 function decode(value: string, label: string): string {
@@ -100,9 +109,6 @@ export async function handleShareRequest(
   try {
     const signingKey = requireSigningKey(dependencies);
     if (deliveryMatch) {
-      if (request.method !== "GET" && request.method !== "HEAD") {
-        throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method not allowed");
-      }
       const token = decode(deliveryMatch[1] ?? "", "Share token");
       const shareLink = await getShareLinkByTokenDigest(
         dependencies.db,
@@ -133,6 +139,52 @@ export async function handleShareRequest(
       const path = deliveryMatch[2]
         ? decode(deliveryMatch[2], "Publication path")
         : "index.html";
+      if (path.startsWith("__mda/query/")) {
+        if (request.method !== "POST") {
+          throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method not allowed");
+        }
+        if (!dependencies.dataSources) {
+          throw new HttpError(
+            503,
+            "DATA_SOURCE_UNAVAILABLE",
+            "Data Source Service is unavailable",
+            true,
+          );
+        }
+        const logicalName = decode(
+          path.slice("__mda/query/".length),
+          "Query ID",
+        );
+        const binding = await getPublicationQueryBinding(
+          dependencies.db,
+          publication.id,
+          logicalName,
+        );
+        if (!binding?.publicExecution) {
+          throw new HttpError(404, "QUERY_NOT_FOUND", "Query not found");
+        }
+        const input = await readJson(request, ExecuteQueryRequestSchema);
+        const result = await dependencies.dataSources.execute(
+          {
+            tenantId: shareLink.tenantId,
+            userId: `share:${shareLink.id}`,
+          },
+          binding.queryId,
+          { revision: binding.revision, parameters: input.parameters },
+          true,
+        );
+        return Response.json(result, {
+          headers: {
+            "access-control-allow-origin": "*",
+            "cache-control": "public, no-store",
+            "referrer-policy": "no-referrer",
+            "x-content-type-options": "nosniff",
+          },
+        });
+      }
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method not allowed");
+      }
       const file = await readPublicationFile(
         requireArtifacts(dependencies),
         publication,
@@ -144,7 +196,7 @@ export async function handleShareRequest(
         headers.set("cache-control", "public, no-store");
         headers.set(
           "content-security-policy",
-          "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'none'; media-src 'self' blob:; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors *; sandbox allow-scripts allow-forms allow-modals allow-popups",
+          "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' blob:; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors *; sandbox allow-scripts allow-forms allow-modals allow-popups",
         );
       } else {
         headers.set("cache-control", "public, max-age=31536000, immutable");

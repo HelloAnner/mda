@@ -4,6 +4,7 @@ import type {
   UploadPublicationResponse,
 } from "@mda/contracts";
 import type { SQL } from "bun";
+import type { DataSourceClient } from "../../adapters/data-source-client.ts";
 import type { ArtifactStore } from "../../shared/artifacts.ts";
 import { HttpError } from "../../shared/http.ts";
 import { createTarGzip } from "../../shared/tar.ts";
@@ -29,6 +30,7 @@ function artifactKey(
 export async function storePublicationArtifact(
   db: SQL,
   artifacts: ArtifactStore,
+  dataSources: DataSourceClient | undefined,
   jobId: string,
   command: AgentLeaseCommand,
   value: DashboardBuildArtifact,
@@ -42,13 +44,49 @@ export async function storePublicationArtifact(
       "Publication build does not match its Revision source",
     );
   }
-  if (validated.artifact.manifest.queries.length > 0) {
-    throw new HttpError(
-      409,
-      "QUERY_BINDINGS_UNAVAILABLE",
-      "Dashboard Queries must be bound to immutable Query Revisions before publication",
-    );
-  }
+  const bindings = await Promise.all(
+    validated.artifact.manifest.queries.map(async (declaration) => {
+      if (!dataSources) {
+        throw new HttpError(
+          503,
+          "DATA_SOURCE_UNAVAILABLE",
+          "Data Source Service is unavailable",
+          true,
+        );
+      }
+      const query = await dataSources.query(
+        { tenantId: build.tenantId, userId: build.requestedBy },
+        declaration.id,
+      );
+      if (
+        query.status !== "active" ||
+        query.revision !== declaration.revision
+      ) {
+        throw new HttpError(
+          409,
+          "QUERY_REVISION_MISMATCH",
+          `Query ${declaration.id} Revision does not match the Manifest`,
+        );
+      }
+      const expected = Object.fromEntries(
+        query.parameters.map((parameter) => [parameter.name, parameter.type]),
+      );
+      if (JSON.stringify(expected) !== JSON.stringify(declaration.parameters)) {
+        throw new HttpError(
+          409,
+          "QUERY_PARAMETER_MISMATCH",
+          `Query ${declaration.id} parameters do not match the Manifest`,
+        );
+      }
+      return {
+        logicalName: declaration.id,
+        queryId: query.id,
+        revision: query.revision,
+        publicExecution: query.public,
+        parameters: declaration.parameters,
+      };
+    }),
+  );
   const key = artifactKey(
     build.tenantId,
     build.dashboardId,
@@ -75,14 +113,20 @@ export async function storePublicationArtifact(
       true,
     );
   }
-  const publication = await completePublication(db, build.id, command, {
-    sourceDigest: validated.artifact.sourceDigest,
-    manifestDigest: validated.artifact.manifestDigest,
-    digest: validated.artifact.digest,
-    artifactKey: key,
-    fileCount: validated.artifact.fileCount,
-    totalBytes: validated.artifact.totalBytes,
-  });
+  const publication = await completePublication(
+    db,
+    build.id,
+    command,
+    {
+      sourceDigest: validated.artifact.sourceDigest,
+      manifestDigest: validated.artifact.manifestDigest,
+      digest: validated.artifact.digest,
+      artifactKey: key,
+      fileCount: validated.artifact.fileCount,
+      totalBytes: validated.artifact.totalBytes,
+    },
+    bindings,
+  );
   return {
     publicationId: publication.id,
     number: publication.number,

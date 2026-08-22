@@ -79,6 +79,7 @@ First-version example:
   "queries": [
     {
       "id": "monthly-sales",
+      "revision": 1,
       "parameters": {
         "startDate": "date",
         "endDate": "date"
@@ -86,6 +87,7 @@ First-version example:
     },
     {
       "id": "region-ranking",
+      "revision": 1,
       "parameters": {}
     }
   ]

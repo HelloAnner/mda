@@ -40,6 +40,14 @@
         "jose": "6.2.9",
       },
     },
+    "apps/data-source-service": {
+      "name": "@mda/data-source-service",
+      "version": "0.1.0",
+      "dependencies": {
+        "@mda/contracts": "workspace:*",
+        "@sinclair/typebox": "0.34.52",
+      },
+    },
     "packages/contracts": {
       "name": "@mda/contracts",
       "version": "0.1.0",
@@ -188,6 +196,8 @@
     "@mda/dashboard-runtime": ["@mda/dashboard-runtime@workspace:packages/dashboard-runtime"],
 
     "@mda/dashboard-template": ["@mda/dashboard-template@workspace:packages/dashboard-template"],
+
+    "@mda/data-source-service": ["@mda/data-source-service@workspace:apps/data-source-service"],
 
     "@opentelemetry/api": ["@opentelemetry/api@1.9.0", "https://mirrors.cloud.tencent.com/npm/@opentelemetry/api/-/api-1.9.0.tgz", {}, "sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg=="],
 

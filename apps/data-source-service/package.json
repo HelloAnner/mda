@@ -1,0 +1,16 @@
+{
+  "name": "@mda/data-source-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/server.ts",
+    "migrate": "bun src/migrate.ts",
+    "fixture": "bun src/fixture.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@mda/contracts": "workspace:*",
+    "@sinclair/typebox": "0.34.52"
+  }
+}

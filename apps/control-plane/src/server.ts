@@ -6,10 +6,13 @@ import {
 } from "@mda/contracts";
 import { RedisClient, type SQL } from "bun";
 import packageJson from "../package.json" with { type: "json" };
+import { DataSourceClient } from "./adapters/data-source-client.ts";
 import { loadConfig } from "./config.ts";
 import { startAgentJobDispatcher } from "./contexts/agent-work/dispatch.ts";
 import { handleAgentWorkRequest } from "./contexts/agent-work/routes.ts";
 import { handleDashboardRequest } from "./contexts/dashboards/routes.ts";
+import { handleAgentDataRequest } from "./contexts/data-access/agent-routes.ts";
+import { handleDataAccessRequest } from "./contexts/data-access/routes.ts";
 import { handlePreviewRequest } from "./contexts/previews/routes.ts";
 import { handlePublicationRequest } from "./contexts/publications/routes.ts";
 import { handleRevisionRequest } from "./contexts/revisions/routes.ts";
@@ -48,6 +51,7 @@ interface ServerDependencies {
   previewSigningKey?: string;
   previewTtlSeconds?: number;
   shareSigningKey?: string;
+  dataSources?: DataSourceClient;
 }
 
 export function startServer(
@@ -71,6 +75,11 @@ export function startServer(
           await dependencies.db`SELECT 1`;
           if (dependencies.redis) await dependencies.redis.ping();
           if (dependencies.artifacts) await dependencies.artifacts.ready();
+          if (dependencies.dataSources) {
+            const response = await dependencies.dataSources.ready();
+            if (!response.ok)
+              throw new Error("Data Source Service is not ready");
+          }
           return Response.json(health);
         } catch {
           return errorResponse(
@@ -99,6 +108,16 @@ export function startServer(
             );
           }
         }
+        const agentDataResponse = await handleAgentDataRequest(
+          request,
+          dependencies,
+        );
+        if (agentDataResponse) return agentDataResponse;
+        const dataAccessResponse = await handleDataAccessRequest(
+          request,
+          dependencies,
+        );
+        if (dataAccessResponse) return dataAccessResponse;
         const shareResponse = await handleShareRequest(request, dependencies);
         if (shareResponse) return shareResponse;
         const publicationResponse = await handlePublicationRequest(
@@ -167,6 +186,10 @@ if (import.meta.main) {
           },
           db,
         );
+  const dataSources = new DataSourceClient(
+    config.dataSourceUrl,
+    config.dataSourceInternalToken,
+  );
   const server = startServer(config.port, config.hostname, {
     db,
     authenticate,
@@ -178,6 +201,7 @@ if (import.meta.main) {
     previewSigningKey: config.previewSigningKey,
     previewTtlSeconds: config.previewTtlSeconds,
     shareSigningKey: config.shareSigningKey,
+    dataSources,
   });
   console.log(
     JSON.stringify({

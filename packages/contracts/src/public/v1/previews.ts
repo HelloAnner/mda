@@ -5,6 +5,7 @@ const DigestSchema = Type.String({ pattern: "^[a-f0-9]{64}$" });
 const RelativePathSchema = Type.String({ minLength: 1, maxLength: 500 });
 const QueryParameterTypeSchema = Type.Union([
   Type.Literal("string"),
+  Type.Literal("integer"),
   Type.Literal("number"),
   Type.Literal("boolean"),
   Type.Literal("date"),
@@ -23,6 +24,7 @@ export const DashboardManifestSchema = Type.Object(
       Type.Object(
         {
           id: Type.String({ minLength: 1, maxLength: 200 }),
+          revision: Type.Integer({ minimum: 1 }),
           parameters: Type.Record(
             Type.String({ minLength: 1, maxLength: 100 }),
             QueryParameterTypeSchema,

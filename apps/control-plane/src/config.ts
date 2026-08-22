@@ -16,6 +16,15 @@ const GlobalConfigFileSchema = Type.Object(
         { additionalProperties: false },
       ),
     ),
+    data_source: Type.Optional(
+      Type.Object(
+        {
+          url: Type.Optional(Type.String({ minLength: 1 })),
+          internal_token_env: Type.Optional(EnvironmentNameSchema),
+        },
+        { additionalProperties: false },
+      ),
+    ),
     database: Type.Optional(
       Type.Object(
         { url_env: Type.Optional(EnvironmentNameSchema) },
@@ -139,6 +148,8 @@ const ConfigSchema = Type.Object(
     previewSigningKey: Type.String({ minLength: 32 }),
     previewTtlSeconds: Type.Integer({ minimum: 60, maximum: 86_400 }),
     shareSigningKey: Type.String({ minLength: 32 }),
+    dataSourceUrl: Type.String({ pattern: "^https?://" }),
+    dataSourceInternalToken: Type.String({ minLength: 32 }),
   },
   { additionalProperties: false },
 );
@@ -165,6 +176,8 @@ export interface Config {
   previewSigningKey: string;
   previewTtlSeconds: number;
   shareSigningKey: string;
+  dataSourceUrl: string;
+  dataSourceInternalToken: string;
 }
 
 function validationErrors(schema: typeof ConfigSchema, value: unknown): string {
@@ -224,6 +237,8 @@ export function loadConfig(
     file.preview?.signing_key_env ?? "MDA_PREVIEW_SIGNING_KEY";
   const shareSigningKeyEnv =
     file.share?.signing_key_env ?? "MDA_SHARE_SIGNING_KEY";
+  const dataSourceTokenEnv =
+    file.data_source?.internal_token_env ?? "DATA_SOURCE_INTERNAL_TOKEN";
   const config = {
     hostname: env.HOST ?? file.server?.host ?? "0.0.0.0",
     port: Number(env.PORT ?? file.server?.port ?? 8080),
@@ -258,6 +273,12 @@ export function loadConfig(
       env.MDA_PREVIEW_TTL_SECONDS ?? file.preview?.ttl_seconds ?? 3_600,
     ),
     shareSigningKey: env.MDA_SHARE_SIGNING_KEY ?? env[shareSigningKeyEnv] ?? "",
+    dataSourceUrl:
+      env.DATA_SOURCE_INTERNAL_URL ??
+      file.data_source?.url ??
+      "http://localhost:8081",
+    dataSourceInternalToken:
+      env.DATA_SOURCE_INTERNAL_TOKEN ?? env[dataSourceTokenEnv] ?? "",
   };
 
   if (!Value.Check(ConfigSchema, config)) {

@@ -4,6 +4,10 @@ port = 8080
 access_password_env = "MDA_ACCESS_PASSWORD"
 # HTTP is suitable only for localhost/private networks or behind an HTTPS proxy.
 
+[data_source]
+url = "http://localhost:8081"
+internal_token_env = "DATA_SOURCE_INTERNAL_TOKEN"
+
 [database]
 url_env = "DATABASE_URL"
 

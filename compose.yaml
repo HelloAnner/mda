@@ -67,6 +67,76 @@ services:
     networks: [control-net]
     restart: "no"
 
+  data-fixture:
+    image: mda-datasource:0.1.0
+    build:
+      context: .
+      dockerfile: docker/mda-datasource.Dockerfile
+    command: ["bun", "apps/data-source-service/src/fixture.ts"]
+    networks: [data-net]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const r=await fetch('http://127.0.0.1:8090/health');process.exit(r.ok?0:1)",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  data-source-migrate:
+    image: mda-datasource:0.1.0
+    build:
+      context: .
+      dockerfile: docker/mda-datasource.Dockerfile
+    command: ["bun", "apps/data-source-service/src/migrate.ts"]
+    environment:
+      DATA_SOURCE_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/mda
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [control-net]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
+  datasource:
+    image: mda-datasource:0.1.0
+    environment:
+      DATA_SOURCE_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/mda
+      DATA_SOURCE_INTERNAL_TOKEN: ${DATA_SOURCE_INTERNAL_TOKEN:?set DATA_SOURCE_INTERNAL_TOKEN}
+    depends_on:
+      data-source-migrate:
+        condition: service_completed_successfully
+      data-fixture:
+        condition: service_healthy
+    networks: [control-net, data-net, connector-net]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:size=128m,noexec,nosuid
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const r=await fetch('http://127.0.0.1:8081/health/ready');process.exit(r.ok?0:1)",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    init: true
+    restart: unless-stopped
+
   main-migrate:
     image: mda-main:0.1.0
     build:
@@ -95,6 +165,8 @@ services:
       MDA_PREVIEW_SIGNING_KEY: ${MDA_PREVIEW_SIGNING_KEY:?set MDA_PREVIEW_SIGNING_KEY}
       MDA_PREVIEW_TTL_SECONDS: ${MDA_PREVIEW_TTL_SECONDS:-3600}
       MDA_SHARE_SIGNING_KEY: ${MDA_SHARE_SIGNING_KEY:?set MDA_SHARE_SIGNING_KEY}
+      DATA_SOURCE_INTERNAL_URL: http://datasource:8081
+      DATA_SOURCE_INTERNAL_TOKEN: ${DATA_SOURCE_INTERNAL_TOKEN:?set DATA_SOURCE_INTERNAL_TOKEN}
       MDA_AUTH_MODE: password
       MDA_LOCAL_TENANT: local
       MDA_LOCAL_USER: local-admin
@@ -110,6 +182,8 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+      datasource:
+        condition: service_healthy
     ports:
       - "${MDA_BIND_ADDRESS:-127.0.0.1}:${MDA_PORT:-8356}:8080"
     networks: [edge-net, control-net, agent-net]
@@ -181,6 +255,9 @@ networks:
   control-net:
     internal: true
   agent-net: {}
+  data-net:
+    internal: true
+  connector-net: {}
 
 volumes:
   postgres-data:

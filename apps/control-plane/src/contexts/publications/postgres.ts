@@ -297,6 +297,13 @@ export async function completePublication(
     fileCount: number;
     totalBytes: number;
   },
+  bindings: Array<{
+    logicalName: string;
+    queryId: string;
+    revision: number;
+    publicExecution: boolean;
+    parameters: Record<string, string>;
+  }>,
   now = new Date(),
 ): Promise<PublicationRecord> {
   return db.begin(async (transaction) => {
@@ -375,6 +382,18 @@ export async function completePublication(
         template_version, runtime_version, artifact_key, file_count,
         total_bytes, created_at
     `;
+    for (const binding of bindings) {
+      await transaction`
+        INSERT INTO publication_query_bindings (
+          publication_id, logical_name, query_id, query_revision,
+          public_execution, parameters
+        ) VALUES (
+          ${publicationId}, ${binding.logicalName}, ${binding.queryId},
+          ${binding.revision}, ${binding.publicExecution},
+          ${JSON.stringify(binding.parameters)}::jsonb
+        )
+      `;
+    }
     await transaction`
       UPDATE publication_builds
       SET status = 'ready', publication_id = ${publicationId},
@@ -446,6 +465,38 @@ export async function getPublication(
   );
   const row = rows[0] as Row | undefined;
   return row ? toPublication(row) : undefined;
+}
+
+export async function getPublicationQueryBinding(
+  db: SQL,
+  publicationId: string,
+  logicalName: string,
+): Promise<
+  | {
+      queryId: string;
+      revision: number;
+      publicExecution: boolean;
+      parameters: Record<string, string>;
+    }
+  | undefined
+> {
+  const rows = await db`
+    SELECT query_id, query_revision, public_execution, parameters
+    FROM publication_query_bindings
+    WHERE publication_id = ${publicationId} AND logical_name = ${logicalName}
+    LIMIT 1
+  `;
+  const row = rows[0] as Row | undefined;
+  return row
+    ? {
+        queryId: String(row.query_id),
+        revision: Number(row.query_revision),
+        publicExecution: Boolean(row.public_execution),
+        parameters: (typeof row.parameters === "string"
+          ? JSON.parse(row.parameters)
+          : row.parameters) as Record<string, string>,
+      }
+    : undefined;
 }
 
 export async function listPublications(

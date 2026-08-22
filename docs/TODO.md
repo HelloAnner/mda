@@ -115,11 +115,22 @@ This file tracks implementation status. The detailed contracts and architecture 
 - [x] Add Share create, list, show, and revoke CLI flows.
 - [x] Verify direct delivery, token tampering, digest-only storage, idempotency, and immediate revocation against `moss-dev-2`.
 
+### HTTP Data Access and live Runtime
+
+- [x] Add the independently deployed Bun Data Source Service, owned migrations, private API, audit, and events.
+- [x] Add Data Source create, list, show, describe, rename, revisioned update, test, activate, enable, disable, soft delete, restore, and schema refresh flows.
+- [x] Add bounded HTTP JSON execution with fixed-host policy, typed parameters, JSON Pointer rows, timeouts, size limits, redirect denial, and private-network opt-in.
+- [x] Add immutable active registered Queries, public-execution approval, result schema inference, execution audit, and CLI management.
+- [x] Add credential-free Moss source summaries plus list, describe, list-query, register-query, and test-query Tools.
+- [x] Validate and pin Query Revisions into immutable Publications.
+- [x] Add same-origin `dashboard.query()` and no-overlap `dashboard.watch()` runtime execution through public Share Links.
+- [x] Verify current source-row changes appear after manual refresh without Agent work, rebuilding, or republishing.
+
 ## Next
 
 Continue the backend distribution and data path:
 
-- [ ] Bind immutable Query Revisions to Dashboard Revisions.
+- [ ] Add the isolated JVM JDBC Runner and allowlisted JDBC drivers.
 - [ ] Move Pi Session history from the shared Agent volume to S3/MinIO before multi-host deployment.
 - [ ] Add the expired-lease recovery sweep and Redis pending-entry reclaim.
 - [ ] Add cancellation wake-ups that abort an active Pi Session immediately instead of on heartbeat.
@@ -130,7 +141,7 @@ Continue the backend distribution and data path:
 ### Foundation and boundaries
 
 - [ ] Management Web workspace and React/Vite application.
-- [ ] Data Source Service workspace and runnable service.
+- [x] Data Source Service workspace and runnable service.
 - [x] Separate non-root Main and Agent images with read-only container filesystems and dropped capabilities.
 - [x] Fixed Dashboard Template and Preview-only Runtime package; live query/watch delivery remains pending.
 - [ ] Remaining Dashboard Revision, Agent Event, Data Access, Runtime, and integration-event contracts.
@@ -146,7 +157,7 @@ Continue the backend distribution and data path:
 
 - [ ] Dashboard metadata CRUD and archive behavior.
 - [x] Draft Checkpoints and immutable Dashboard Revisions.
-- [ ] Query Bindings owned by Dashboard Revisions.
+- [x] Immutable Query Bindings owned by Publications; promote binding validation earlier into Dashboard Revision save when Query editing is added.
 - [ ] S3-backed Pi Session history; source workspaces now restore from MinIO Checkpoints.
 - [ ] Persisted expired-lease recovery, immediate cancellation wake-ups, and Redis reclaim.
 - [x] Durable ordered Agent Events and SSE replay.
@@ -154,30 +165,30 @@ Continue the backend distribution and data path:
 - [x] Pi SDK integration pinned to the reviewed version.
 - [x] Explicit Pi `ResourceLoader`, Coding Tool allowlist, platform-maintained progressive Dashboard Skill catalog, and read-only Data Source summary prompt section.
 - [x] Restrict Moss's business operations to Dashboard generation; Data Source management stays outside its Tool boundary.
-- [ ] Agent Tools for source discovery, queries, and publishing; validation and Preview Tools now work.
+- [ ] Agent publishing Tool; source discovery, registered Query, validation, and Preview Tools now work.
 - [ ] Pi history upload and retention cleanup; source restore, Checkpoint upload, clean build, Preview upload, and fenced settlement now work.
 - [x] Immutable Preview build and sandboxed browser rendering.
 
 ### Data Access
 
-- [ ] Data Source CRUD, rename, configuration revisions, test, activation, enable, disable, delete, and restore.
+- [x] HTTP Data Source CRUD, rename, configuration revisions, test, activation, enable, disable, delete, restore, and schema refresh.
 - [ ] Secret-reference storage and resolution boundary.
-- [ ] Presentation-neutral schema descriptions and health projection.
-- [ ] HTTP JSON connector with SSRF, redirect, timeout, and size protections.
-- [ ] Registered Queries and immutable Query Revisions.
+- [x] Presentation-neutral administrator-declared schema descriptions and health projection.
+- [x] HTTP JSON connector with host, private-address, redirect, timeout, and size protections.
+- [x] Registered Queries and immutable first Query Revisions.
 - [ ] Signed execution grants from Main to Data Source Service.
-- [ ] Runtime query execution, parameter binding, limits, auditing, and structured errors.
+- [x] Runtime query execution, parameter binding, limits, auditing, and structured errors.
 - [ ] Isolated JVM JDBC Runner and allowlisted drivers.
 - [ ] Read-only parameterized JDBC execution and value normalization.
 
 ### Runtime, publishing, and sharing
 
-- [ ] `dashboard.query()` Runtime API.
-- [ ] `dashboard.watch()` polling, cancellation, no-overlap, visibility pause, focus refresh, and bounded retry.
+- [x] `dashboard.query()` Runtime API for public approved Query Bindings.
+- [x] `dashboard.watch()` polling, cancellation, no-overlap, visibility pause, focus refresh, and bounded retry signaling.
 - [ ] Viewer Host and validated iframe message protocol.
 - [x] Immutable Preview and Publication artifacts.
 - [ ] Clean build, validation, and browser smoke-test pipeline.
-- [ ] Authenticated, public-live, and snapshot Share Link modes; revocable public static Publication links now work.
+- [ ] Authenticated and snapshot Share Link modes; revocable public-live links with explicitly approved Queries now work.
 - [ ] Authorization-safe query caching and invalidation, if load requires it.
 
 ### CLI and Web feature parity
@@ -187,13 +198,13 @@ Continue the backend distribution and data path:
 - [ ] Session resume, fork, inspect, compact, and export.
 - [ ] Job watch, event replay, cancellation, retry, Tool inspection, errors, logs, and statistics.
 - [ ] Complete combined export; validation, Preview, save, publication, source Revision export, and Publication bundle export now work.
-- [ ] Source and Query commands.
+- [x] HTTP Source and first immutable Query management commands.
 - [ ] Simulation, audit, completion, and full deployment diagnostics.
 - [ ] Management Web screens for the same Control Plane capabilities.
 
 ### Deployment and hardening
 
-- [ ] Separate Main, Agent, Data Source, and JDBC Runner Dockerfiles.
+- [ ] JDBC Runner Dockerfile; separate Main, Agent, and Data Source images now work.
 - [ ] Complete Docker Compose topology with PostgreSQL, Redis, MinIO, networks, health checks, and secrets.
 - [ ] Database migration and seed commands.
 - [ ] Container filesystem, process, capability, and network hardening.
@@ -218,6 +229,12 @@ mda dashboard save <dashboard-id> --message "First Revision"
 mda dashboard publish <dashboard-id> --revision <revision-id>
 mda publication list --dashboard <dashboard-id>
 mda publication download <publication-id> --output dashboard-bundle.tar.gz
+mda share create --publication <publication-id>
+mda source add http --name <name> --config source.json
+mda source test <source-id>
+mda source activate <source-id>
+mda query register --config query.json
+mda query test <query-id>
 mda revision list --dashboard <dashboard-id>
 mda revision files <revision-id>
 mda revision export <revision-id> --output dashboard-source.tar.gz

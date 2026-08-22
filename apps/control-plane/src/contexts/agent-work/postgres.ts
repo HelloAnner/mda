@@ -286,6 +286,49 @@ export async function enqueueAgentJob(
   }
 }
 
+export async function authorizeAgentJobLease(
+  db: SQL,
+  id: string,
+  command: AgentLeaseCommand,
+  now = new Date(),
+): Promise<{ tenantId: string; userId: string }> {
+  const rows = await db`
+    SELECT tenant_id, created_by, id, state, attempt_count, lease_owner,
+      fencing_token, lease_expires_at, cancellation_requested_at,
+      terminal_error, version, created_at, started_at, finished_at
+    FROM agent_jobs WHERE id = ${id} LIMIT 1
+  `;
+  const row = rows[0] as Row | undefined;
+  if (!row) {
+    throw new HttpError(404, "AGENT_JOB_NOT_FOUND", "Agent Job not found");
+  }
+  try {
+    assertActiveLease(
+      toAggregate(row),
+      command.owner,
+      command.fencingToken,
+      now,
+    );
+  } catch (error) {
+    transitionError(error);
+  }
+  return { tenantId: String(row.tenant_id), userId: String(row.created_by) };
+}
+
+export async function getAgentJobPrincipal(
+  db: SQL,
+  id: string,
+): Promise<{ tenantId: string; userId: string }> {
+  const rows = await db`
+    SELECT tenant_id, created_by FROM agent_jobs WHERE id = ${id} LIMIT 1
+  `;
+  const row = rows[0] as Row | undefined;
+  if (!row) {
+    throw new HttpError(404, "AGENT_JOB_NOT_FOUND", "Agent Job not found");
+  }
+  return { tenantId: String(row.tenant_id), userId: String(row.created_by) };
+}
+
 export async function getAgentJob(
   db: SQL,
   tenantId: string,

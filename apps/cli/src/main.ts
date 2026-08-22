@@ -15,10 +15,17 @@ import {
   DashboardRevisionListResponseSchema,
   DashboardRevisionSchema,
   DashboardSchema,
+  DataSourceDescriptionSchema,
+  DataSourceListResponseSchema,
+  DataSourceSchema,
+  DataSourceTestResultSchema,
   type Publication,
   PublicationBuildSchema,
   PublicationListResponseSchema,
   PublicationSchema,
+  QueryResultSchema,
+  RegisteredQueryListResponseSchema,
+  RegisteredQuerySchema,
   type ServiceMetadata,
   ServiceMetadataSchema,
   ShareLinkListResponseSchema,
@@ -55,6 +62,15 @@ Commands:
   share list --dashboard <dashboard-id> [--limit <n>]
   share show <share-link-id>
   share revoke <share-link-id>
+  source list | show <id> | describe <id>
+  source add http --name <name> --config <json-file>
+  source rename <id> --name <name> --expected-version <n>
+  source update <id> --config <json-file> --expected-version <n>
+  source test | activate | enable | disable | delete | restore | refresh <id>
+  query list [--source <source-id>]
+  query show <query-id>
+  query register --config <json-file>
+  query test <query-id> [--params <json-file>]
 
 Global options:
   --api-url <url>  Control Plane URL
@@ -69,6 +85,16 @@ Environment:
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
+}
+
+async function readJsonFile(path: string): Promise<unknown> {
+  try {
+    return JSON.parse(await Bun.file(path).text());
+  } catch (error) {
+    throw new Error(
+      `Cannot read JSON file ${path}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 function parseDuration(value: string): number | undefined {
@@ -134,9 +160,11 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
       allowPositionals: true,
       options: {
         "api-url": { type: "string" },
+        config: { type: "string" },
         dashboard: { type: "string" },
         description: { type: "string" },
         expires: { type: "string" },
+        "expected-version": { type: "string" },
         force: { type: "boolean" },
         help: { type: "boolean", short: "h" },
         "idempotency-key": { type: "string" },
@@ -144,8 +172,10 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
         message: { type: "string" },
         name: { type: "string" },
         output: { type: "string" },
+        params: { type: "string" },
         publication: { type: "string" },
         revision: { type: "string" },
+        source: { type: "string" },
         tenant: { type: "string" },
         version: { type: "boolean", short: "V" },
       },
@@ -213,6 +243,8 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
     parsed.positionals[0] !== "revision" &&
     parsed.positionals[0] !== "publication" &&
     parsed.positionals[0] !== "share" &&
+    parsed.positionals[0] !== "source" &&
+    parsed.positionals[0] !== "query" &&
     parsed.positionals[0] !== "chat"
   ) {
     console.error(`Unknown command: ${parsed.positionals.join(" ")}`);
@@ -518,6 +550,282 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
 
       console.error(
         `Unknown share command: ${parsed.positionals.slice(1).join(" ")}`,
+      );
+      return 2;
+    }
+
+    if (parsed.positionals[0] === "source") {
+      if (action === "list" && parsed.positionals.length === 2) {
+        const body = await apiRequest(config, "/api/data-sources");
+        if (!Value.Check(DataSourceListResponseSchema, body)) {
+          throw new Error("Control Plane returned invalid Data Source data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else {
+          for (const source of body.items) {
+            console.log(
+              [
+                source.id,
+                source.name,
+                source.kind,
+                source.status,
+                source.health,
+                `v${source.version}`,
+              ].join("\t"),
+            );
+          }
+        }
+        return 0;
+      }
+      if (
+        (action === "show" || action === "describe") &&
+        parsed.positionals.length === 3
+      ) {
+        const id = parsed.positionals[2] ?? "";
+        const body = await apiRequest(
+          config,
+          `/api/data-sources/${encodeURIComponent(id)}${action === "describe" ? "/description" : ""}`,
+        );
+        const schema =
+          action === "describe"
+            ? DataSourceDescriptionSchema
+            : DataSourceSchema;
+        if (!Value.Check(schema, body)) {
+          throw new Error("Control Plane returned invalid Data Source data");
+        }
+        console.log(JSON.stringify(body, null, output === "json" ? 0 : 2));
+        return 0;
+      }
+      if (action === "add" && parsed.positionals[2] === "http") {
+        const name = stringValue(parsed.values.name);
+        const configPath = stringValue(parsed.values.config);
+        if (!name || !configPath) {
+          console.error("source add http requires --name and --config");
+          return 2;
+        }
+        const file = (await readJsonFile(configPath)) as Record<
+          string,
+          unknown
+        >;
+        const sourceConfig =
+          file && typeof file === "object" && "config" in file
+            ? file.config
+            : file;
+        const body = await apiRequest(config, "/api/data-sources", {
+          method: "POST",
+          headers: {
+            "idempotency-key":
+              stringValue(parsed.values["idempotency-key"]) ??
+              crypto.randomUUID(),
+          },
+          body: JSON.stringify({
+            name,
+            ...(stringValue(parsed.values.description)
+              ? { description: stringValue(parsed.values.description) }
+              : {}),
+            kind: "http",
+            config: sourceConfig,
+            ...(file && typeof file === "object" && Array.isArray(file.entities)
+              ? { entities: file.entities }
+              : {}),
+          }),
+        });
+        if (!Value.Check(DataSourceSchema, body)) {
+          throw new Error("Control Plane returned invalid Data Source data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else console.log(`${body.id}\t${body.name}\t${body.status}`);
+        return 0;
+      }
+      if (action === "rename" && parsed.positionals.length === 3) {
+        const name = stringValue(parsed.values.name);
+        const expectedVersion = Number(
+          stringValue(parsed.values["expected-version"]),
+        );
+        if (
+          !name ||
+          !Number.isInteger(expectedVersion) ||
+          expectedVersion < 1
+        ) {
+          console.error("source rename requires --name and --expected-version");
+          return 2;
+        }
+        const body = await apiRequest(
+          config,
+          `/api/data-sources/${encodeURIComponent(parsed.positionals[2] ?? "")}/rename`,
+          {
+            method: "POST",
+            body: JSON.stringify({ name, expectedVersion }),
+          },
+        );
+        if (!Value.Check(DataSourceSchema, body)) {
+          throw new Error("Control Plane returned invalid Data Source data");
+        }
+        console.log(
+          output === "json"
+            ? JSON.stringify(body)
+            : `${body.id}\t${body.name}\tv${body.version}`,
+        );
+        return 0;
+      }
+      if (action === "update" && parsed.positionals.length === 3) {
+        const configPath = stringValue(parsed.values.config);
+        const expectedVersion = Number(
+          stringValue(parsed.values["expected-version"]),
+        );
+        if (!Number.isInteger(expectedVersion) || expectedVersion < 1) {
+          console.error("source update requires --expected-version");
+          return 2;
+        }
+        const file = configPath
+          ? ((await readJsonFile(configPath)) as Record<string, unknown>)
+          : undefined;
+        const body = await apiRequest(
+          config,
+          `/api/data-sources/${encodeURIComponent(parsed.positionals[2] ?? "")}/update`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              expectedVersion,
+              ...(stringValue(parsed.values.description)
+                ? { description: stringValue(parsed.values.description) }
+                : {}),
+              ...(file
+                ? {
+                    config: "config" in file ? file.config : file,
+                    ...(Array.isArray(file.entities)
+                      ? { entities: file.entities }
+                      : {}),
+                  }
+                : {}),
+            }),
+          },
+        );
+        if (!Value.Check(DataSourceSchema, body)) {
+          throw new Error("Control Plane returned invalid Data Source data");
+        }
+        console.log(
+          output === "json"
+            ? JSON.stringify(body)
+            : `${body.id}\tv${body.version}`,
+        );
+        return 0;
+      }
+      if (
+        [
+          "test",
+          "activate",
+          "enable",
+          "disable",
+          "delete",
+          "restore",
+          "refresh",
+        ].includes(action ?? "") &&
+        parsed.positionals.length === 3
+      ) {
+        const remoteAction = action === "refresh" ? "schema-refresh" : action;
+        const body = await apiRequest(
+          config,
+          `/api/data-sources/${encodeURIComponent(parsed.positionals[2] ?? "")}/${remoteAction}`,
+          { method: "POST", body: JSON.stringify({}) },
+        );
+        const schema =
+          action === "test"
+            ? DataSourceTestResultSchema
+            : action === "refresh"
+              ? DataSourceDescriptionSchema
+              : DataSourceSchema;
+        if (!Value.Check(schema, body)) {
+          throw new Error("Control Plane returned invalid Data Source data");
+        }
+        console.log(JSON.stringify(body, null, output === "json" ? 0 : 2));
+        return 0;
+      }
+      console.error(
+        `Unknown source command: ${parsed.positionals.slice(1).join(" ")}`,
+      );
+      return 2;
+    }
+
+    if (parsed.positionals[0] === "query") {
+      if (action === "list" && parsed.positionals.length === 2) {
+        const sourceId = stringValue(parsed.values.source);
+        const body = await apiRequest(
+          config,
+          `/api/queries${sourceId ? `?sourceId=${encodeURIComponent(sourceId)}` : ""}`,
+        );
+        if (!Value.Check(RegisteredQueryListResponseSchema, body)) {
+          throw new Error("Control Plane returned invalid Query data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else {
+          for (const query of body.items) {
+            console.log(
+              [
+                query.id,
+                `r${query.revision}`,
+                query.name,
+                query.sourceId,
+                query.public ? "public" : "private",
+              ].join("\t"),
+            );
+          }
+        }
+        return 0;
+      }
+      if (action === "show" && parsed.positionals.length === 3) {
+        const body = await apiRequest(
+          config,
+          `/api/queries/${encodeURIComponent(parsed.positionals[2] ?? "")}`,
+        );
+        if (!Value.Check(RegisteredQuerySchema, body)) {
+          throw new Error("Control Plane returned invalid Query data");
+        }
+        console.log(JSON.stringify(body, null, output === "json" ? 0 : 2));
+        return 0;
+      }
+      if (action === "register" && parsed.positionals.length === 2) {
+        const configPath = stringValue(parsed.values.config);
+        if (!configPath) {
+          console.error("query register requires --config");
+          return 2;
+        }
+        const body = await apiRequest(config, "/api/queries", {
+          method: "POST",
+          headers: {
+            "idempotency-key":
+              stringValue(parsed.values["idempotency-key"]) ??
+              crypto.randomUUID(),
+          },
+          body: JSON.stringify(await readJsonFile(configPath)),
+        });
+        if (!Value.Check(RegisteredQuerySchema, body)) {
+          throw new Error("Control Plane returned invalid Query data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else console.log(`${body.id}\tr${body.revision}\t${body.name}`);
+        return 0;
+      }
+      if (action === "test" && parsed.positionals.length === 3) {
+        const paramsPath = stringValue(parsed.values.params);
+        const body = await apiRequest(
+          config,
+          `/api/queries/${encodeURIComponent(parsed.positionals[2] ?? "")}/execute`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              parameters: paramsPath ? await readJsonFile(paramsPath) : {},
+            }),
+          },
+        );
+        if (!Value.Check(QueryResultSchema, body)) {
+          throw new Error("Control Plane returned invalid Query result");
+        }
+        console.log(JSON.stringify(body, null, output === "json" ? 0 : 2));
+        return 0;
+      }
+      console.error(
+        `Unknown query command: ${parsed.positionals.slice(1).join(" ")}`,
       );
       return 2;
     }

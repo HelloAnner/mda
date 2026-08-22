@@ -20,6 +20,8 @@ const valid = {
   MDA_ACCESS_PASSWORD: "test-global-password",
   MDA_PREVIEW_SIGNING_KEY: "test-preview-signing-key-at-least-32-bytes",
   MDA_SHARE_SIGNING_KEY: "test-share-signing-key-at-least-32-bytes",
+  DATA_SOURCE_INTERNAL_URL: "http://mda-datasource:8081",
+  DATA_SOURCE_INTERNAL_TOKEN: "test-data-source-internal-token-32-bytes",
   MDA_AUTH_MODE: "oidc",
 };
 
@@ -46,6 +48,8 @@ test("loads and converts startup configuration", () => {
     previewSigningKey: valid.MDA_PREVIEW_SIGNING_KEY,
     previewTtlSeconds: 3_600,
     shareSigningKey: valid.MDA_SHARE_SIGNING_KEY,
+    dataSourceUrl: valid.DATA_SOURCE_INTERNAL_URL,
+    dataSourceInternalToken: valid.DATA_SOURCE_INTERNAL_TOKEN,
   });
 });
 
@@ -57,6 +61,9 @@ test("loads deployment and model references from mda.toml", () => {
     `[server]
 port = 9091
 access_password_env = "TEST_ACCESS_PASSWORD"
+[data_source]
+url = "http://mda-datasource:8081"
+internal_token_env = "TEST_DATA_SOURCE_TOKEN"
 [database]
 url_env = "TEST_DATABASE_URL"
 [redis]
@@ -99,6 +106,7 @@ api_key_env = "TEST_MODEL_API_KEY"
         TEST_S3_SECRET_KEY: valid.S3_SECRET_ACCESS_KEY,
         TEST_PREVIEW_SIGNING_KEY: valid.MDA_PREVIEW_SIGNING_KEY,
         TEST_SHARE_SIGNING_KEY: valid.MDA_SHARE_SIGNING_KEY,
+        TEST_DATA_SOURCE_TOKEN: valid.DATA_SOURCE_INTERNAL_TOKEN,
       }),
     ).toMatchObject({
       port: 9091,

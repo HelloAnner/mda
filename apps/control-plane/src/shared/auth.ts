@@ -140,9 +140,15 @@ export async function ensureLocalPrincipal(
       INSERT INTO memberships (tenant_id, user_id, permissions)
       VALUES (
         ${tenantId}, ${userId},
-        ARRAY['dashboard.create', 'dashboard.read', 'dashboard.edit']
+        ARRAY[
+          'dashboard.create', 'dashboard.read', 'dashboard.edit',
+          'data-source.list', 'data-source.read', 'data-source.create',
+          'data-source.update', 'data-source.test', 'query.create',
+          'query.execute'
+        ]
       )
-      ON CONFLICT (tenant_id, user_id) DO NOTHING
+      ON CONFLICT (tenant_id, user_id) DO UPDATE
+      SET permissions = EXCLUDED.permissions, status = 'active', updated_at = now()
     `;
   });
 }

@@ -120,6 +120,22 @@ export async function runWorker(
             sessionId: claimed.job.sessionId,
             prompt: claimed.prompt,
             dataSources: claimed.dataSources,
+            dataAccess: {
+              list: () => client.dataSources(entry.jobId, lease),
+              describe: (sourceId) =>
+                client.describeSource(entry.jobId, lease, sourceId),
+              queries: (sourceId) =>
+                client.queries(entry.jobId, lease, sourceId),
+              register: (request, idempotencyKey) =>
+                client.registerQuery(
+                  entry.jobId,
+                  lease,
+                  request,
+                  idempotencyKey,
+                ),
+              execute: (queryId, request) =>
+                client.executeQuery(entry.jobId, lease, queryId, request),
+            },
             ...(claimed.workspace
               ? { workspaceSnapshot: claimed.workspace.snapshot }
               : {}),

@@ -7,6 +7,7 @@ import {
   SettleAgentJobRequestSchema,
 } from "@mda/contracts";
 import type { SQL } from "bun";
+import type { DataSourceClient } from "../../adapters/data-source-client.ts";
 import type { ArtifactStore } from "../../shared/artifacts.ts";
 import {
   authorizeInternalRequest,
@@ -29,6 +30,7 @@ import {
   claimAgentJob,
   enqueueAgentJob,
   getAgentJob,
+  getAgentJobPrincipal,
   heartbeatAgentJob,
   listAgentEvents,
   settleAgentJob,
@@ -41,6 +43,7 @@ interface AgentWorkRouteDependencies {
   internalAgentToken?: string;
   agentLeaseMs?: number;
   artifacts?: ArtifactStore;
+  dataSources?: DataSourceClient;
 }
 
 function requireArtifacts(
@@ -224,12 +227,48 @@ export async function handleAgentWorkRequest(
         command.owner,
         leaseMs,
       );
+      let dataSources = claimed.dataSources;
+      if (dependencies.dataSources) {
+        try {
+          const principal = await getAgentJobPrincipal(dependencies.db, jobId);
+          const available = await dependencies.dataSources.list(principal);
+          dataSources = {
+            status: "ready",
+            items: available.items
+              .filter((source) =>
+                ["active", "disabled"].includes(source.status),
+              )
+              .map((source) => ({
+                id: source.id,
+                name: source.name,
+                ...(source.description
+                  ? { description: source.description }
+                  : {}),
+                kind: source.kind,
+                status:
+                  source.health === "degraded" ||
+                  source.health === "unreachable"
+                    ? "degraded"
+                    : source.status === "active"
+                      ? "active"
+                      : "disabled",
+                schemaRevision: source.schemaRevision ?? 1,
+              })),
+          };
+        } catch {
+          dataSources = { status: "unavailable", items: [] };
+        }
+      }
       const workspace = await loadAgentWorkspace(
         dependencies.db,
         requireArtifacts(dependencies),
         jobId,
       );
-      return Response.json({ ...claimed, ...(workspace ? { workspace } : {}) });
+      return Response.json({
+        ...claimed,
+        dataSources,
+        ...(workspace ? { workspace } : {}),
+      });
     }
     if (action === "start") {
       return Response.json(
