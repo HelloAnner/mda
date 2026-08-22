@@ -424,48 +424,39 @@ A successful refresh creates an immutable Schema Revision. Published queries con
 ```ts
 interface HttpSourceConfig {
   baseUrl: string;
-  allowedMethods: Array<"GET" | "POST">;
-  defaultHeaders?: Record<string, string>;
-  auth:
+  allowPrivateNetwork?: boolean;
+  auth?:
     | { type: "none" }
-    | { type: "bearer"; secretRef: string }
-    | { type: "basic"; usernameRef: string; passwordRef: string }
-    | { type: "api-key"; name: string; location: "header" | "query"; secretRef: string }
-    | { type: "oauth-client-credentials"; tokenUrl: string; clientIdRef: string; clientSecretRef: string };
+    | { type: "bearer"; secretRef: string };
   timeoutMs: number;
   maxResponseBytes: number;
-  allowedContentTypes: string[];
 }
 ```
 
-The service stores secret references, not resolved secret values.
+The current connector supports unauthenticated and Bearer-authenticated JSON Sources. Basic, API-key, and OAuth client-credential modes require additional typed contracts before use. The service stores only a bounded file-backed secret reference, resolves it inside the Data Source Service, rejects invalid references and multiline values, and never returns the resolved Bearer token through an API. Compose mounts only `var/data-source-secrets/` into this service; model and platform credentials remain outside its filesystem.
 
 ### 10.2 Registered HTTP Operation
 
 ```ts
 interface HttpOperation {
-  type: "http";
   method: "GET" | "POST";
   path: string;
-  query?: Record<string, ParameterTemplate>;
-  headers?: Record<string, ParameterTemplate>;
-  body?: unknown;
-  response: {
-    format: "json";
-    rowsPointer: string;
-  };
+  query?: Record<string, string>; // query field → declared parameter name
+  body?: unknown;                 // fixed JSON body in the current release
+  rowsPointer: string;
+  readOnly: true;
 }
 ```
 
-`rowsPointer` uses JSON Pointer rather than arbitrary executable extraction code.
+`rowsPointer` uses JSON Pointer rather than arbitrary executable extraction code. Authentication comes only from the active Source Config and cannot be overridden by a Query. Query-defined headers and body templates are not part of the current contract.
 
 The host is fixed by the Data Source configuration. A Query parameter cannot replace the host or protocol.
 
 ### 10.3 HTTP Parameters
 
-Parameters may be inserted only into declared path, query, header, or body positions through typed templates.
+The current release inserts typed parameters only into declared URL query fields. Future path, header, or body templates require explicit typed contracts and the same validation boundary.
 
-They must not:
+Parameters must not:
 
 - Select a different host.
 - Add arbitrary headers.

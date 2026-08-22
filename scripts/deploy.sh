@@ -81,8 +81,9 @@ ensure_local_secrets() {
     printf 'JDBC_RUNNER_TOKEN=%s\n' "$(openssl rand -hex 32)" >>"$LOCAL_ENV"
   fi
 
-  mkdir -p var/secrets
+  mkdir -p var/secrets var/data-source-secrets
   chmod 700 var/secrets
+  chmod 0711 var/data-source-secrets
   if [[ ! -e var/secrets/model_api_key ]]; then
     umask 077
     printf '%s' "${MDA_MODEL_API_KEY:-${DEEPSEEK_API_KEY:-}}" >var/secrets/model_api_key
@@ -91,10 +92,10 @@ ensure_local_secrets() {
   # private parent directory protects the host copy; read permission lets the
   # non-root Agent read the mounted file inside its container.
   chmod 0444 var/secrets/model_api_key
-  chmod 0600 var/secrets/jdbc_fixture_username var/secrets/jdbc_fixture_password 2>/dev/null || true
-  printf 'postgres' >var/secrets/jdbc_fixture_username
-  awk -F= '$1 == "POSTGRES_PASSWORD" { sub(/^[^=]*=/, ""); print; exit }' "$LOCAL_ENV" >var/secrets/jdbc_fixture_password
-  chmod 0444 var/secrets/jdbc_fixture_username var/secrets/jdbc_fixture_password
+  chmod 0600 var/data-source-secrets/jdbc_fixture_username var/data-source-secrets/jdbc_fixture_password 2>/dev/null || true
+  printf 'postgres' >var/data-source-secrets/jdbc_fixture_username
+  awk -F= '$1 == "POSTGRES_PASSWORD" { sub(/^[^=]*=/, ""); print; exit }' "$LOCAL_ENV" >var/data-source-secrets/jdbc_fixture_password
+  chmod 0444 var/data-source-secrets/jdbc_fixture_username var/data-source-secrets/jdbc_fixture_password
   if [[ ! -s var/secrets/model_api_key ]]; then
     warn "model API key is empty; configure var/secrets/model_api_key before using Agent chat"
   fi
@@ -128,13 +129,13 @@ bootstrap_remote_secrets() {
       <var/secrets/model_api_key
   fi
   ssh "$SSH_HOST" \
-    "chmod 0600 '$REMOTE_DIR/var/secrets/jdbc_fixture_username' '$REMOTE_DIR/var/secrets/jdbc_fixture_password' 2>/dev/null || true; printf 'postgres' > '$REMOTE_DIR/var/secrets/jdbc_fixture_username' && awk -F= '\$1 == \"POSTGRES_PASSWORD\" { sub(/^[^=]*=/, \"\"); print; exit }' '$REMOTE_DIR/.env' > '$REMOTE_DIR/var/secrets/jdbc_fixture_password' && chmod 700 '$REMOTE_DIR/var/secrets' && chmod 0444 '$REMOTE_DIR/var/secrets/model_api_key' '$REMOTE_DIR/var/secrets/jdbc_fixture_username' '$REMOTE_DIR/var/secrets/jdbc_fixture_password'"
+    "mkdir -p '$REMOTE_DIR/var/data-source-secrets' && chmod 0600 '$REMOTE_DIR/var/data-source-secrets/jdbc_fixture_username' '$REMOTE_DIR/var/data-source-secrets/jdbc_fixture_password' 2>/dev/null || true; printf 'postgres' > '$REMOTE_DIR/var/data-source-secrets/jdbc_fixture_username' && awk -F= '\$1 == \"POSTGRES_PASSWORD\" { sub(/^[^=]*=/, \"\"); print; exit }' '$REMOTE_DIR/.env' > '$REMOTE_DIR/var/data-source-secrets/jdbc_fixture_password' && chmod 700 '$REMOTE_DIR/var/secrets' && chmod 0711 '$REMOTE_DIR/var/data-source-secrets' && chmod 0444 '$REMOTE_DIR/var/secrets/model_api_key' '$REMOTE_DIR/var/data-source-secrets/jdbc_fixture_username' '$REMOTE_DIR/var/data-source-secrets/jdbc_fixture_password'"
 }
 
 sync_sources() {
   command -v rsync >/dev/null || die "rsync is required for server deployment"
   info "syncing sources to $SSH_HOST:$REMOTE_DIR"
-  ssh "$SSH_HOST" "mkdir -p '$REMOTE_DIR/var/secrets' && chmod 700 '$REMOTE_DIR/var/secrets'"
+  ssh "$SSH_HOST" "mkdir -p '$REMOTE_DIR/var/secrets' '$REMOTE_DIR/var/data-source-secrets' && chmod 700 '$REMOTE_DIR/var/secrets' && chmod 0711 '$REMOTE_DIR/var/data-source-secrets'"
   rsync -az --delete \
     --exclude=.git \
     --exclude=node_modules \

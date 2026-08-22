@@ -423,7 +423,10 @@ export async function testSource(
     const { latencyMs } =
       value.source.kind === "jdbc"
         ? await testJdbcSource(jdbc, value.config as JdbcDataSourceConfig)
-        : await testHttpSource(value.config as HttpDataSourceConfig);
+        : await testHttpSource(
+            value.config as HttpDataSourceConfig,
+            jdbc.secretsRoot,
+          );
     const result: DataSourceTestResult = {
       sourceId: id,
       configRevision: value.source.configRevision,
@@ -666,6 +669,8 @@ export async function registerQuery(
           source.config as HttpDataSourceConfig,
           preliminary,
           input.sampleParameters ?? {},
+          undefined,
+          jdbc.secretsRoot,
         );
   const columns = result.meta.columns.length
     ? result.meta.columns
@@ -795,6 +800,8 @@ export async function executeQuery(
             source.config as HttpDataSourceConfig,
             query,
             input.parameters,
+            undefined,
+            jdbc.secretsRoot,
           );
     await db`
       INSERT INTO query_execution_audit (

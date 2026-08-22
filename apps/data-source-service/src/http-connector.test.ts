@@ -1,4 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { RegisteredQuery } from "@mda/contracts";
 import {
   executeHttpQuery,
@@ -48,6 +51,52 @@ test("executes bounded parameterized HTTP JSON operations", async () => {
     "revenue",
   ]);
   expect(result.meta.cache.hit).toBe(false);
+});
+
+test("resolves bearer authentication without storing its value", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mda-http-secrets-"));
+  await writeFile(join(root, "mock-read-token"), "secret-token\n", {
+    mode: 0o600,
+  });
+  const authenticated = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    routes: {
+      "/": (request) =>
+        request.headers.get("authorization") === "Bearer secret-token"
+          ? Response.json({ rows: [{ status: "authorized" }] })
+          : Response.json({ error: "unauthorized" }, { status: 401 }),
+    },
+  });
+  const authenticatedConfig = {
+    ...config,
+    baseUrl: `http://127.0.0.1:${authenticated.port}`,
+    auth: { type: "bearer" as const, secretRef: "mock-read-token" },
+  };
+  try {
+    expect(
+      (await testHttpSource(authenticatedConfig, root)).latencyMs,
+    ).toBeGreaterThanOrEqual(0);
+    const result = await executeHttpQuery(
+      authenticatedConfig,
+      {
+        ...query,
+        operation: {
+          ...query.operation,
+          path: "/",
+          query: {},
+          rowsPointer: "/rows",
+        },
+      },
+      { region: "APAC" },
+      undefined,
+      root,
+    );
+    expect(result.rows).toEqual([{ status: "authorized" }]);
+  } finally {
+    authenticated.stop(true);
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("blocks private destinations unless explicitly approved", async () => {

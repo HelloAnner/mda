@@ -1,29 +1,15 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import type {
   JdbcDataSourceConfig,
   JdbcQueryOperation,
   QueryResult,
   RegisteredQuery,
 } from "@mda/contracts";
+import { resolveSecret } from "./secrets.ts";
 
 export interface JdbcConnectorConfig {
   runnerUrl: string;
   runnerToken: string;
   secretsRoot: string;
-}
-
-async function secret(root: string, reference: string): Promise<string> {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(reference)) {
-    throw new Error("SECRET_ACCESS_DENIED: Invalid secret reference");
-  }
-  try {
-    const value = await readFile(join(root, reference), "utf8");
-    if (!value || value.length > 10_000) throw new Error("invalid");
-    return value.trimEnd();
-  } catch {
-    throw new Error("SECRET_NOT_FOUND: Data Source secret is unavailable");
-  }
 }
 
 async function runner(
@@ -52,8 +38,8 @@ async function runner(
     body: JSON.stringify({
       driverId: config.driverId,
       jdbcUrl: config.jdbcUrl,
-      username: await secret(connector.secretsRoot, config.usernameRef),
-      password: await secret(connector.secretsRoot, config.passwordRef),
+      username: await resolveSecret(connector.secretsRoot, config.usernameRef),
+      password: await resolveSecret(connector.secretsRoot, config.passwordRef),
       connectionTimeoutMs: config.connectionTimeoutMs,
       statementTimeoutMs: config.statementTimeoutMs,
       maxRows: config.maxRows,

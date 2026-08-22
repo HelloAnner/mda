@@ -5,6 +5,17 @@ import type {
   QueryResult,
   RegisteredQuery,
 } from "@mda/contracts";
+import { resolveSecret } from "./secrets.ts";
+
+async function authorization(
+  config: HttpDataSourceConfig,
+  secretsRoot: string,
+): Promise<Record<string, string>> {
+  if (!config.auth || config.auth.type === "none") return {};
+  return {
+    authorization: `Bearer ${await resolveSecret(secretsRoot, config.auth.secretRef)}`,
+  };
+}
 
 function privateAddress(address: string): boolean {
   if (address === "::1" || address === "0:0:0:0:0:0:0:1") return true;
@@ -103,6 +114,7 @@ export async function executeHttpQuery(
   query: Pick<RegisteredQuery, "operation" | "parameters" | "columns">,
   parameters: Record<string, string | number | boolean | null>,
   signal?: AbortSignal,
+  secretsRoot = "/run/secrets",
 ): Promise<QueryResult> {
   const started = performance.now();
   const base = await validateDestination(config);
@@ -147,6 +159,7 @@ export async function executeHttpQuery(
     method: operation.method,
     headers: {
       accept: "application/json",
+      ...(await authorization(config, secretsRoot)),
       ...(operation.method === "POST"
         ? { "content-type": "application/json" }
         : {}),
@@ -198,12 +211,16 @@ export async function executeHttpQuery(
 
 export async function testHttpSource(
   config: HttpDataSourceConfig,
+  secretsRoot = "/run/secrets",
 ): Promise<{ latencyMs: number }> {
   const started = performance.now();
   const url = await validateDestination(config);
   const response = await fetch(url, {
     method: "GET",
-    headers: { accept: "application/json" },
+    headers: {
+      accept: "application/json",
+      ...(await authorization(config, secretsRoot)),
+    },
     redirect: "error",
     signal: AbortSignal.timeout(config.timeoutMs),
   });

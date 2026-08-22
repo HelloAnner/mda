@@ -21,6 +21,21 @@ export const HttpDataSourceConfigSchema = Type.Object(
   {
     baseUrl: Type.String({ minLength: 1, maxLength: 2_000 }),
     allowPrivateNetwork: Type.Optional(Type.Boolean()),
+    auth: Type.Optional(
+      Type.Union([
+        Type.Object(
+          { type: Type.Literal("none") },
+          { additionalProperties: false },
+        ),
+        Type.Object(
+          {
+            type: Type.Literal("bearer"),
+            secretRef: Type.String({ minLength: 1, maxLength: 200 }),
+          },
+          { additionalProperties: false },
+        ),
+      ]),
+    ),
     timeoutMs: Type.Integer({ minimum: 100, maximum: 30_000 }),
     maxResponseBytes: Type.Integer({ minimum: 1_024, maximum: 10_485_760 }),
   },

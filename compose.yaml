@@ -144,7 +144,10 @@ services:
       jdbc-runner:
         condition: service_healthy
     networks: [control-net, data-net, connector-net]
-    secrets: [jdbc_fixture_username, jdbc_fixture_password]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./var/data-source-secrets:/run/secrets:ro
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -299,7 +302,3 @@ volumes:
 secrets:
   model_api_key:
     file: ${MDA_MODEL_API_KEY_FILE:-./var/secrets/model_api_key}
-  jdbc_fixture_username:
-    file: ./var/secrets/jdbc_fixture_username
-  jdbc_fixture_password:
-    file: ./var/secrets/jdbc_fixture_password
