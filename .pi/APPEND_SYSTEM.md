@@ -19,21 +19,24 @@ This repository deploys to a remote server. Follow these rules strictly:
 
 ## Server access
 
-- Connect to the deployment server via the SSH alias **`moss-dev-2`** only:
-  `ssh moss-dev-2`. The alias is defined in the local `~/.ssh/config` and must stay there.
-- **Never write the real server IP address into any file in this repository.**
-  The repo is public; only the alias `moss-dev-2` may appear in committed files.
+- Connect to the deployment server through an SSH alias defined by the current
+  environment in local `~/.ssh/config`; any environment-specific alias is valid.
+- When the environment does not specify an alias, use **`moss-dev-2`**. It is the
+  default deployment target, not a required alias for every environment.
+- **Never write a real server IP address into any file in this repository.** The
+  repo is public; committed files may contain SSH aliases or alias placeholders only.
 - The default deployment port is **8356**. Compose exposes the Control Plane on
   `${MDA_PORT:-8356}` (container port 8080).
 
 ## Deploying
 
 - `make deploy` is the single entrypoint: it deploys every Compose service to
-  the server automatically via `rsync` + `docker compose` over SSH. Only when
-  the server is unreachable may it fall back to the full local Compose stack.
-- **Never deploy or start a local MDA stack while `moss-dev-2` is reachable.**
-  Do not use `make deploy-local`, `docker compose up`, or any equivalent local
-  deployment as an additional test when the server is available.
+  the configured server (default: `moss-dev-2`) automatically via `rsync` +
+  `docker compose` over SSH. Only when that server is unreachable may it fall
+  back to the full local Compose stack.
+- **Never deploy or start a local MDA stack while the configured deployment
+  server is reachable.** Do not use `make deploy-local`, `docker compose up`, or
+  any equivalent local deployment as an additional test when the server is available.
 - Every feature follows this release gate:
   1. Implement the feature on the local computer.
   2. Run `bun run typecheck && bun run lint && bun test` locally.
@@ -45,12 +48,12 @@ This repository deploys to a remote server. Follow these rules strictly:
      `make status` and `make health` as supporting checks, then debug failures
      against the server logs and repeat deployment and CLI testing.
   6. Commit and push the feature only after the local CLI feature test passes.
-- If `moss-dev-2` is unreachable, and only then, deploy the full stack locally
-  and run the same newest local CLI feature test against that local deployment
-  before committing and pushing.
-- To reach the deployed Control Plane from this computer use an SSH tunnel:
-  `ssh -N -L 8356:127.0.0.1:8356 moss-dev-2`, then point the CLI at
-  `MDA_API_URL=http://localhost:8356`.
+- If the configured deployment server is unreachable, and only then, deploy the
+  full stack locally and run the same newest local CLI feature test against that
+  local deployment before committing and pushing.
+- To reach the deployed Control Plane from this computer, substitute the active
+  alias in `ssh -N -L 8356:127.0.0.1:8356 <ssh-alias>` (use `moss-dev-2` by
+  default), then point the CLI at `MDA_API_URL=http://localhost:8356`.
 
 ## Secrets
 
