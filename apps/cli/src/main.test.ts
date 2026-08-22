@@ -176,6 +176,109 @@ test("dashboard preview waits for the isolated build and prints its URL", async 
   }
 });
 
+test("dashboard publish waits for an immutable Publication", async () => {
+  const job = {
+    id: "job_publish_1",
+    dashboardId: "dashboard_1",
+    sessionId: "session_publish_1",
+    purpose: "publish",
+    state: "queued",
+    attemptCount: 0,
+    version: 1,
+    createdAt: "2026-08-22T00:00:00.000Z",
+  };
+  const build = {
+    id: "publication-build_1",
+    dashboardId: "dashboard_1",
+    revisionId: "revision_1",
+    jobId: job.id,
+    sourceDigest: "a".repeat(64),
+    status: "building",
+    createdAt: "2026-08-22T00:00:00.000Z",
+  };
+  const publication = {
+    id: "publication_1",
+    dashboardId: "dashboard_1",
+    revisionId: "revision_1",
+    number: 1,
+    sourceDigest: "a".repeat(64),
+    manifestDigest: "b".repeat(64),
+    buildDigest: "c".repeat(64),
+    templateVersion: "1",
+    runtimeVersion: "1",
+    fileCount: 3,
+    totalBytes: 512,
+    createdAt: "2026-08-22T00:00:01.000Z",
+  };
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      const path = new URL(request.url).pathname;
+      if (request.method === "POST") {
+        return Response.json({ build, job }, { status: 202 });
+      }
+      if (path.endsWith("/events")) {
+        const event = {
+          sequence: 1,
+          timestamp: publication.createdAt,
+          type: "publication.created",
+          jobId: job.id,
+          data: { publicationId: publication.id },
+        };
+        return new Response(
+          `id: 1\nevent: publication.created\ndata: ${JSON.stringify(event)}\n\n`,
+          { headers: { "content-type": "text/event-stream" } },
+        );
+      }
+      if (path === `/api/agent-jobs/${job.id}`) {
+        return Response.json({
+          ...job,
+          state: "succeeded",
+          version: 3,
+          startedAt: "2026-08-22T00:00:00.100Z",
+          finishedAt: publication.createdAt,
+        });
+      }
+      if (path === `/api/publication-builds/${build.id}`) {
+        return Response.json({
+          ...build,
+          status: "ready",
+          publicationId: publication.id,
+          completedAt: publication.createdAt,
+        });
+      }
+      return Response.json(publication);
+    },
+  });
+
+  try {
+    const subprocess = Bun.spawn(
+      [
+        process.execPath,
+        new URL("./main.ts", import.meta.url).pathname,
+        "--api-url",
+        `http://127.0.0.1:${server.port}`,
+        "dashboard",
+        "publish",
+        "dashboard_1",
+        "--revision",
+        "revision_1",
+      ],
+      { stderr: "pipe", stdout: "pipe" },
+    );
+    expect(await subprocess.exited).toBe(0);
+    expect(await new Response(subprocess.stdout).text()).toContain(
+      "publication_1\tp1\trevision_1\t3\t512",
+    );
+    expect(await new Response(subprocess.stderr).text()).toContain(
+      "publication created",
+    );
+  } finally {
+    server.stop(true);
+  }
+});
+
 test("dashboard create sends tenant auth and renders the result", async () => {
   let received: Request | undefined;
   let receivedBody: unknown;

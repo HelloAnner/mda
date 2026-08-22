@@ -78,10 +78,14 @@ export async function runWorker(
 
       const events = new AgentEventForwarder(client, entry.jobId, lease);
       try {
-        let previewArtifact: DashboardBuildArtifact | undefined;
-        if (claimed.job.purpose === "preview") {
-          if (!claimed.workspace || !claimed.preview) {
-            throw new Error("Preview Job has no pinned source");
+        let buildArtifact: DashboardBuildArtifact | undefined;
+        if (claimed.job.purpose !== "edit") {
+          if (
+            !claimed.workspace ||
+            (claimed.job.purpose === "preview" && !claimed.preview) ||
+            (claimed.job.purpose === "publish" && !claimed.publication)
+          ) {
+            throw new Error(`${claimed.job.purpose} Job has no pinned source`);
           }
           events.push("agent.started", {});
           events.push("build.started", { templateVersion: "1" });
@@ -90,7 +94,7 @@ export async function runWorker(
               claimed.workspace.snapshot,
               runAbort.signal,
             );
-            previewArtifact = result.artifact;
+            buildArtifact = result.artifact;
             events.push("validation.completed", {
               status: "passed",
               sourceDigest: result.artifact.sourceDigest,
@@ -122,7 +126,7 @@ export async function runWorker(
             signal: runAbort.signal,
             onEvent: (type, data) => events.push(type, data),
           });
-          previewArtifact = result.previewArtifact;
+          buildArtifact = result.previewArtifact;
         }
         if (leaseLost) throw new Error("Agent lease lost");
 
@@ -145,17 +149,30 @@ export async function runWorker(
             });
           }
         }
-        if (!cancellationRequested && previewArtifact) {
-          const preview = await client.preview(
-            entry.jobId,
-            lease,
-            previewArtifact,
-          );
-          events.push("preview.ready", {
-            previewId: preview.previewId,
-            path: preview.path,
-            digest: preview.digest,
-          });
+        if (!cancellationRequested && buildArtifact) {
+          if (claimed.job.purpose === "publish") {
+            const publication = await client.publication(
+              entry.jobId,
+              lease,
+              buildArtifact,
+            );
+            events.push("publication.created", {
+              publicationId: publication.publicationId,
+              number: publication.number,
+              digest: publication.digest,
+            });
+          } else {
+            const preview = await client.preview(
+              entry.jobId,
+              lease,
+              buildArtifact,
+            );
+            events.push("preview.ready", {
+              previewId: preview.previewId,
+              path: preview.path,
+              digest: preview.digest,
+            });
+          }
         }
         heartbeatAbort.abort();
         await heartbeat;
@@ -182,7 +199,10 @@ export async function runWorker(
         if (!leaseLost) {
           const message = safeError(error, config.model.apiKey);
           const errorCode =
-            error instanceof DashboardBuildError ? error.code : "AGENT_FAILED";
+            error instanceof DashboardBuildError ||
+            error instanceof ControlPlaneError
+              ? error.code
+              : "AGENT_FAILED";
           events.push("agent.failed", {
             code: cancellationRequested ? "CANCELLED" : errorCode,
             message,

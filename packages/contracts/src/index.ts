@@ -26,6 +26,12 @@ export {
   UploadDashboardPreviewResponseSchema,
 } from "./internal/agent/v1/previews.ts";
 export {
+  type UploadPublicationRequest,
+  UploadPublicationRequestSchema,
+  type UploadPublicationResponse,
+  UploadPublicationResponseSchema,
+} from "./internal/agent/v1/publications.ts";
+export {
   type AgentWorkspaceRestore,
   AgentWorkspaceRestoreSchema,
   type CheckpointAgentWorkspaceRequest,
@@ -81,6 +87,20 @@ export {
   type DashboardValidationIssue,
   DashboardValidationIssueSchema,
 } from "./public/v1/previews.ts";
+export {
+  type CreatePublicationRequest,
+  CreatePublicationRequestSchema,
+  type CreatePublicationResponse,
+  CreatePublicationResponseSchema,
+  type Publication,
+  type PublicationBuild,
+  type PublicationBuildListResponse,
+  PublicationBuildListResponseSchema,
+  PublicationBuildSchema,
+  type PublicationListResponse,
+  PublicationListResponseSchema,
+  PublicationSchema,
+} from "./public/v1/publications.ts";
 export {
   type CreateDashboardRevisionRequest,
   CreateDashboardRevisionRequestSchema,

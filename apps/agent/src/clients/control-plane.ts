@@ -9,6 +9,7 @@ import type {
   DashboardBuildArtifact,
   PendingAgentEvent,
   UploadDashboardPreviewResponse,
+  UploadPublicationResponse,
 } from "@mda/contracts";
 
 export class ControlPlaneError extends Error {
@@ -69,6 +70,16 @@ export function createControlPlaneClient(baseUrl: string, token: string) {
         `/internal/v1/agent-jobs/${encodeURIComponent(jobId)}/checkpoint`,
         command,
       ) as Promise<CheckpointAgentWorkspaceResponse>;
+    },
+    publication(
+      jobId: string,
+      command: AgentLeaseCommand,
+      artifact: DashboardBuildArtifact,
+    ) {
+      return request(
+        `/internal/v1/agent-jobs/${encodeURIComponent(jobId)}/publication`,
+        { ...command, artifact },
+      ) as Promise<UploadPublicationResponse>;
     },
     preview(
       jobId: string,

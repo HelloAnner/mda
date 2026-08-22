@@ -97,10 +97,20 @@ This file tracks implementation status. The detailed contracts and architecture 
 - [x] Add expiring signed Preview URLs with path validation, strict CSP, MIME allowlisting, and sandboxing.
 - [x] Add `mda dashboard preview` and verify desktop, 390px, token rejection, and restart durability against `moss-dev-2`.
 
+### Publications
+
+- [x] Add model-free, lease-fenced Publication Builds from explicit immutable Revisions.
+- [x] Store immutable content-addressed Publication bundles and monotonic Publication metadata.
+- [x] Reject declared Queries until immutable Query Revision bindings are available.
+- [x] Add deterministic built-bundle export without source, Sessions, logs, tokens, or credentials.
+- [x] Add Dashboard publish plus Publication list, show, and download CLI flows.
+- [x] Verify publish, metadata, exact bundle download, and deployment durability against `moss-dev-2`.
+
 ## Next
 
-Continue the authoritative authoring and Agent Job path:
+Continue the backend distribution and data path:
 
+- [ ] Add hashed, expiring, revocable Share Links that directly serve one immutable Publication.
 - [ ] Bind immutable Query Revisions to Dashboard Revisions.
 - [ ] Move Pi Session history from the shared Agent volume to S3/MinIO before multi-host deployment.
 - [ ] Add the expired-lease recovery sweep and Redis pending-entry reclaim.
@@ -157,7 +167,7 @@ Continue the authoritative authoring and Agent Job path:
 - [ ] `dashboard.query()` Runtime API.
 - [ ] `dashboard.watch()` polling, cancellation, no-overlap, visibility pause, focus refresh, and bounded retry.
 - [ ] Viewer Host and validated iframe message protocol.
-- [ ] Immutable Publication artifacts; immutable Preview artifacts now work.
+- [x] Immutable Preview and Publication artifacts.
 - [ ] Clean build, validation, and browser smoke-test pipeline.
 - [ ] Authenticated, public-live, and snapshot Share Links.
 - [ ] Authorization-safe query caching and invalidation, if load requires it.
@@ -168,7 +178,7 @@ Continue the authoritative authoring and Agent Job path:
 - [x] Dashboard generation with fixed validation and Preview builds through Agent chat or model-free CLI Jobs.
 - [ ] Session resume, fork, inspect, compact, and export.
 - [ ] Job watch, event replay, cancellation, retry, Tool inspection, errors, logs, and statistics.
-- [ ] Publication and complete export; validation, Preview, save, and source Revision export now work.
+- [ ] Complete combined export; validation, Preview, save, publication, source Revision export, and Publication bundle export now work.
 - [ ] Source and Query commands.
 - [ ] Simulation, audit, completion, and full deployment diagnostics.
 - [ ] Management Web screens for the same Control Plane capabilities.
@@ -197,6 +207,9 @@ mda doctor
 mda chat <dashboard-id>
 mda dashboard preview <dashboard-id> [--revision <revision-id>]
 mda dashboard save <dashboard-id> --message "First Revision"
+mda dashboard publish <dashboard-id> --revision <revision-id>
+mda publication list --dashboard <dashboard-id>
+mda publication download <publication-id> --output dashboard-bundle.tar.gz
 mda revision list --dashboard <dashboard-id>
 mda revision files <revision-id>
 mda revision export <revision-id> --output dashboard-source.tar.gz

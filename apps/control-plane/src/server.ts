@@ -11,6 +11,7 @@ import { startAgentJobDispatcher } from "./contexts/agent-work/dispatch.ts";
 import { handleAgentWorkRequest } from "./contexts/agent-work/routes.ts";
 import { handleDashboardRequest } from "./contexts/dashboards/routes.ts";
 import { handlePreviewRequest } from "./contexts/previews/routes.ts";
+import { handlePublicationRequest } from "./contexts/publications/routes.ts";
 import { handleRevisionRequest } from "./contexts/revisions/routes.ts";
 import { type ArtifactStore, S3ArtifactStore } from "./shared/artifacts.ts";
 import {
@@ -96,6 +97,11 @@ export function startServer(
             );
           }
         }
+        const publicationResponse = await handlePublicationRequest(
+          request,
+          dependencies,
+        );
+        if (publicationResponse) return publicationResponse;
         const previewResponse = await handlePreviewRequest(
           request,
           dependencies,

@@ -327,6 +327,13 @@ export async function claimAgentJob(
         LIMIT 1
       `;
       const preview = previews[0] as Row | undefined;
+      const publicationBuilds = await transaction`
+        SELECT id, revision_id, source_digest
+        FROM publication_builds
+        WHERE job_id = ${id} AND status = 'building'
+        LIMIT 1
+      `;
+      const publicationBuild = publicationBuilds[0] as Row | undefined;
       return {
         job: toAgentJob(updated),
         prompt: String(row.prompt_text),
@@ -336,6 +343,15 @@ export async function claimAgentJob(
               preview: {
                 id: String(preview.id),
                 sourceDigest: String(preview.source_digest),
+              },
+            }
+          : {}),
+        ...(publicationBuild
+          ? {
+              publication: {
+                buildId: String(publicationBuild.id),
+                revisionId: String(publicationBuild.revision_id),
+                sourceDigest: String(publicationBuild.source_digest),
               },
             }
           : {}),
@@ -514,6 +530,46 @@ export async function settleAgentJob(
             SET status = 'failed', terminal_error = ${JSON.stringify(error)}::jsonb,
               completed_at = ${now.toISOString()}
             WHERE id = ${String(preview.id)} AND status = 'building'
+          `;
+        }
+      }
+      if (row.purpose === "publish") {
+        const builds = await transaction`
+          SELECT id, status, publication_id FROM publication_builds
+          WHERE job_id = ${id}
+          LIMIT 1
+          FOR UPDATE
+        `;
+        const build = builds[0] as Row | undefined;
+        if (
+          command.state === "succeeded" &&
+          (build?.status !== "ready" || !build.publication_id)
+        ) {
+          throw new HttpError(
+            409,
+            "PUBLICATION_NOT_READY",
+            "Publication Job cannot succeed without an immutable Publication",
+          );
+        }
+        if (command.state !== "succeeded" && build?.status === "building") {
+          const error =
+            command.error ??
+            (command.state === "cancelled"
+              ? {
+                  code: "CANCELLED",
+                  message: "Publication build was cancelled",
+                  retryable: false,
+                }
+              : {
+                  code: "PUBLICATION_BUILD_FAILED",
+                  message: "Publication build failed",
+                  retryable: false,
+                });
+          await transaction`
+            UPDATE publication_builds
+            SET status = 'failed', terminal_error = ${JSON.stringify(error)}::jsonb,
+              completed_at = ${now.toISOString()}
+            WHERE id = ${String(build.id)} AND status = 'building'
           `;
         }
       }

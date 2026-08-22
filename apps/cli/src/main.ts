@@ -5,6 +5,7 @@ import { rename, rm } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import {
   CreateDashboardPreviewResponseSchema,
+  CreatePublicationResponseSchema,
   type Dashboard,
   DashboardListResponseSchema,
   DashboardPreviewSchema,
@@ -13,6 +14,10 @@ import {
   DashboardRevisionListResponseSchema,
   DashboardRevisionSchema,
   DashboardSchema,
+  type Publication,
+  PublicationBuildSchema,
+  PublicationListResponseSchema,
+  PublicationSchema,
   type ServiceMetadata,
   ServiceMetadataSchema,
 } from "@mda/contracts";
@@ -34,11 +39,15 @@ Commands:
   dashboard show <dashboard-id>
   dashboard preview <dashboard-id> [--revision <revision-id>]
   dashboard save <dashboard-id> [--message <text>]
+  dashboard publish <dashboard-id> --revision <revision-id>
   revision list --dashboard <dashboard-id> [--limit <n>]
   revision show <revision-id>
   revision files <revision-id>
   revision read <revision-id> <path>
   revision export <revision-id> [--output <path>] [--force]
+  publication list --dashboard <dashboard-id> [--limit <n>]
+  publication show <publication-id>
+  publication download <publication-id> [--output <path>] [--force]
 
 Global options:
   --api-url <url>  Control Plane URL
@@ -72,6 +81,20 @@ function printRevision(revision: DashboardRevision): void {
       revision.totalBytes,
       revision.digest,
       revision.createdAt,
+    ].join("\t"),
+  );
+}
+
+function printPublication(publication: Publication): void {
+  console.log(
+    [
+      publication.id,
+      `p${publication.number}`,
+      publication.revisionId,
+      publication.fileCount,
+      publication.totalBytes,
+      publication.buildDigest,
+      publication.createdAt,
     ].join("\t"),
   );
 }
@@ -123,9 +146,12 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
     stringValue(parsed.values["api-url"]) ??
     process.env.MDA_API_URL ??
     "http://localhost:8080";
-  const isRevisionExport =
-    parsed.positionals[0] === "revision" && parsed.positionals[1] === "export";
-  const output = isRevisionExport
+  const isArtifactDownload =
+    (parsed.positionals[0] === "revision" &&
+      parsed.positionals[1] === "export") ||
+    (parsed.positionals[0] === "publication" &&
+      parsed.positionals[1] === "download");
+  const output = isArtifactDownload
     ? (process.env.MDA_OUTPUT ?? "human")
     : (stringValue(parsed.values.output) ?? process.env.MDA_OUTPUT ?? "human");
   if (output !== "human" && output !== "json") {
@@ -163,6 +189,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
   if (
     parsed.positionals[0] !== "dashboard" &&
     parsed.positionals[0] !== "revision" &&
+    parsed.positionals[0] !== "publication" &&
     parsed.positionals[0] !== "chat"
   ) {
     console.error(`Unknown command: ${parsed.positionals.join(" ")}`);
@@ -287,6 +314,74 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
       );
       return 2;
     }
+
+    if (parsed.positionals[0] === "publication") {
+      if (action === "list" && parsed.positionals.length === 2) {
+        const dashboardId = stringValue(parsed.values.dashboard);
+        if (!dashboardId) {
+          console.error("publication list requires --dashboard");
+          return 2;
+        }
+        const rawLimit = stringValue(parsed.values.limit) ?? "50";
+        const limit = Number(rawLimit);
+        if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+          console.error("--limit must be an integer between 1 and 100");
+          return 2;
+        }
+        const body = await apiRequest(
+          config,
+          `/api/dashboards/${encodeURIComponent(dashboardId)}/publications?limit=${limit}`,
+        );
+        if (!Value.Check(PublicationListResponseSchema, body)) {
+          throw new Error("Control Plane returned invalid Publication data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else body.items.forEach(printPublication);
+        return 0;
+      }
+
+      if (action === "show" && parsed.positionals.length === 3) {
+        const body = await apiRequest(
+          config,
+          `/api/publications/${encodeURIComponent(parsed.positionals[2] ?? "")}`,
+        );
+        if (!Value.Check(PublicationSchema, body)) {
+          throw new Error("Control Plane returned invalid Publication data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else printPublication(body);
+        return 0;
+      }
+
+      if (action === "download" && parsed.positionals.length === 3) {
+        const publicationId = parsed.positionals[2] ?? "";
+        const path =
+          stringValue(parsed.values.output) ?? `${publicationId}.tar.gz`;
+        if (existsSync(path) && !parsed.values.force) {
+          console.error(`Refusing to overwrite existing file: ${path}`);
+          return 4;
+        }
+        const response = await apiFetch(
+          config,
+          `/api/publications/${encodeURIComponent(publicationId)}/export`,
+        );
+        const temporary = `${path}.tmp-${crypto.randomUUID()}`;
+        try {
+          await Bun.write(temporary, response);
+          await rename(temporary, path);
+        } finally {
+          await rm(temporary, { force: true });
+        }
+        console.log(path);
+        return 0;
+      }
+
+      console.error(
+        `Unknown publication command: ${parsed.positionals.slice(1).join(" ")}`,
+      );
+      return 2;
+    }
+
     if (action === "list" && parsed.positionals.length === 2) {
       const rawLimit = stringValue(parsed.values.limit) ?? "50";
       const limit = Number(rawLimit);
@@ -368,6 +463,54 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
       }
       if (output === "json") console.log(JSON.stringify(preview));
       else console.log(preview.url);
+      return 0;
+    }
+
+    if (action === "publish" && parsed.positionals.length === 3) {
+      const revisionId = stringValue(parsed.values.revision);
+      if (!revisionId) {
+        console.error("dashboard publish requires --revision");
+        return 2;
+      }
+      const dashboardId = parsed.positionals[2] ?? "";
+      const created = await apiRequest(
+        config,
+        `/api/dashboards/${encodeURIComponent(dashboardId)}/publications`,
+        {
+          method: "POST",
+          headers: {
+            "idempotency-key":
+              stringValue(parsed.values["idempotency-key"]) ??
+              crypto.randomUUID(),
+          },
+          body: JSON.stringify({ revisionId }),
+        },
+      );
+      if (!Value.Check(CreatePublicationResponseSchema, created)) {
+        throw new Error("Control Plane returned invalid Publication data");
+      }
+      const job = await watchJob(config, created.job);
+      if (job.state !== "succeeded") return 5;
+      const build = await apiRequest(
+        config,
+        `/api/publication-builds/${encodeURIComponent(created.build.id)}`,
+      );
+      if (!Value.Check(PublicationBuildSchema, build)) {
+        throw new Error("Control Plane returned invalid Publication Build");
+      }
+      if (build.status !== "ready" || !build.publicationId) {
+        console.error(`Publication Build is ${build.status}`);
+        return 5;
+      }
+      const publication = await apiRequest(
+        config,
+        `/api/publications/${encodeURIComponent(build.publicationId)}`,
+      );
+      if (!Value.Check(PublicationSchema, publication)) {
+        throw new Error("Control Plane returned invalid Publication data");
+      }
+      if (output === "json") console.log(JSON.stringify(publication));
+      else printPublication(publication);
       return 0;
     }
 

@@ -119,6 +119,8 @@ export async function watchJob(
             );
           } else if (event.type === "preview.ready") {
             process.stderr.write("  preview ready\n");
+          } else if (event.type === "publication.created") {
+            process.stderr.write("  publication created\n");
           } else if (event.type === "agent.failed") {
             process.stderr.write(
               `\nAgent failed: ${String(event.data.message ?? "Unknown error")}\n`,

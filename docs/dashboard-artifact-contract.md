@@ -348,6 +348,7 @@ Complete the following flow using a sample sales data source:
 
 - `docs/dashboard-artifacts/revisions.md`: durable Draft Checkpoints, immutable source Revisions, restore, and export.
 - `docs/dashboard-artifacts/previews.md`: fixed clean builds, boundary validation, immutable Preview bundles, and signed delivery.
+- `docs/dashboard-artifacts/publications.md`: Revision-pinned clean builds, immutable Publications, and bundle export.
 - `docs/data-gateway-query-contract.md`: Data Source and Query definitions.
 - `docs/data-source-management-module.md`: Standalone HTTP/JDBC Data Source CRUD and connector ownership.
 - `docs/live-data-and-refresh-contract.md`: Draft checkpoints, live runtime queries, polling, freshness, and sharing modes.

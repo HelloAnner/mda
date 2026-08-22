@@ -26,6 +26,7 @@ export const AgentEventTypeSchema = Type.Union([
   Type.Literal("validation.completed"),
   Type.Literal("build.completed"),
   Type.Literal("preview.ready"),
+  Type.Literal("publication.created"),
   Type.Literal("agent.failed"),
   Type.Literal("agent.completed"),
 ]);

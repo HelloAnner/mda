@@ -75,6 +75,16 @@ export const ClaimedAgentJobSchema = Type.Object(
         { additionalProperties: false },
       ),
     ),
+    publication: Type.Optional(
+      Type.Object(
+        {
+          buildId: Type.String({ minLength: 1 }),
+          revisionId: Type.String({ minLength: 1 }),
+          sourceDigest: Type.String({ pattern: "^[a-f0-9]{64}$" }),
+        },
+        { additionalProperties: false },
+      ),
+    ),
     lease: Type.Object(
       {
         owner: Type.String({ minLength: 1 }),
