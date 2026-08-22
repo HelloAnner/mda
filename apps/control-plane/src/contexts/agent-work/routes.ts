@@ -33,6 +33,7 @@ import {
   getAgentJobPrincipal,
   heartbeatAgentJob,
   listAgentEvents,
+  listAgentJobs,
   settleAgentJob,
   startAgentJob,
 } from "./postgres.ts";
@@ -136,13 +137,20 @@ export async function handleAgentWorkRequest(
   const messageMatch = url.pathname.match(
     /^\/api\/dashboards\/([^/]+)\/messages$/,
   );
+  const publicJobCollection = url.pathname === "/api/agent-jobs";
   const publicJobMatch = url.pathname.match(
     /^\/api\/agent-jobs\/([^/]+)(?:\/(cancel|events))?$/,
   );
   const internalMatch = url.pathname.match(
     /^\/internal\/v1\/agent-jobs\/([^/]+)\/(claim|start|heartbeat|events|checkpoint|settle)$/,
   );
-  if (!messageMatch && !publicJobMatch && !internalMatch) return undefined;
+  if (
+    !messageMatch &&
+    !publicJobCollection &&
+    !publicJobMatch &&
+    !internalMatch
+  )
+    return undefined;
 
   const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
   try {
@@ -161,6 +169,26 @@ export async function handleAgentWorkRequest(
         requestId,
       );
       return Response.json(result.job, { status: result.created ? 202 : 200 });
+    }
+
+    if (publicJobCollection) {
+      if (request.method !== "GET") {
+        throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method not allowed");
+      }
+      const principal = await dependencies.authenticate(request);
+      requirePermission(principal, "dashboard.read");
+      const limit = Number(url.searchParams.get("limit") ?? "50");
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+        throw new HttpError(400, "VALIDATION_ERROR", "Invalid limit");
+      }
+      return Response.json({
+        items: await listAgentJobs(
+          dependencies.db,
+          principal.tenantId,
+          url.searchParams.get("dashboardId") ?? undefined,
+          limit,
+        ),
+      });
     }
 
     if (publicJobMatch) {

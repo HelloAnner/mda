@@ -132,8 +132,8 @@ Continue the backend distribution and data path:
 
 - [ ] Add the isolated JVM JDBC Runner and allowlisted JDBC drivers.
 - [ ] Move Pi Session history from the shared Agent volume to S3/MinIO before multi-host deployment.
-- [ ] Add the expired-lease recovery sweep and Redis pending-entry reclaim.
-- [ ] Add cancellation wake-ups that abort an active Pi Session immediately instead of on heartbeat.
+- [x] Add the expired-lease recovery sweep and Redis pending-entry reclaim.
+- [ ] Add Redis cancellation wake-ups; active Pi Sessions now abort through one-second authoritative cancellation polling.
 - [ ] Add Data Source Service PostgreSQL migrations and its separate database role.
 
 ## Not Done
@@ -149,7 +149,7 @@ Continue the backend distribution and data path:
 - [ ] Production secret-file loading.
 - [ ] Remaining PostgreSQL schemas, migrations, constraints, and separate service roles.
 - [ ] Idempotency, audit, and transactional outbox primitives.
-- [ ] Redis event wake-ups and pending-entry recovery; Streams and outbox dispatch now run.
+- [ ] Redis event wake-ups; Streams, outbox dispatch, expired-lease recovery, and pending-entry reclaim now run.
 - [x] Private S3/MinIO source artifact storage with persistent Compose volume and readiness checks.
 - [ ] Import-boundary test between workspaces and services.
 
@@ -159,7 +159,7 @@ Continue the backend distribution and data path:
 - [x] Draft Checkpoints and immutable Dashboard Revisions.
 - [x] Immutable Query Bindings owned by Publications; promote binding validation earlier into Dashboard Revision save when Query editing is added.
 - [ ] S3-backed Pi Session history; source workspaces now restore from MinIO Checkpoints.
-- [ ] Persisted expired-lease recovery, immediate cancellation wake-ups, and Redis reclaim.
+- [ ] Redis cancellation wake-ups; persisted expired-lease recovery, one-second cancellation polling, and Redis reclaim now work.
 - [x] Durable ordered Agent Events and SSE replay.
 - [x] Independently scalable `mda-agent` image consuming Redis Streams.
 - [x] Pi SDK integration pinned to the reviewed version.
@@ -196,7 +196,7 @@ Continue the backend distribution and data path:
 - [ ] CLI contexts and OIDC login beyond `MDA_TOKEN` authentication.
 - [x] Dashboard generation with fixed validation and Preview builds through Agent chat or model-free CLI Jobs.
 - [ ] Session resume, fork, inspect, compact, and export.
-- [ ] Job watch, event replay, cancellation, retry, Tool inspection, errors, logs, and statistics.
+- [ ] Job retry, Tool inspection, logs, and statistics; list, show, watch, durable replay, cancellation, and terminal errors now work.
 - [ ] Complete combined export; validation, Preview, save, publication, source Revision export, and Publication bundle export now work.
 - [x] HTTP Source and first immutable Query management commands.
 - [ ] Simulation, audit, completion, and full deployment diagnostics.

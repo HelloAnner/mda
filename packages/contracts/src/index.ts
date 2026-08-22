@@ -49,6 +49,8 @@ export {
   type AgentEventType,
   AgentEventTypeSchema,
   type AgentJob,
+  type AgentJobListResponse,
+  AgentJobListResponseSchema,
   type AgentJobPurpose,
   AgentJobPurposeSchema,
   AgentJobSchema,

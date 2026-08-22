@@ -39,7 +39,7 @@ export async function runWorker(
   );
 
   while (true) {
-    const entry = await readAgentJob(redis, consumerId);
+    const entry = await readAgentJob(redis, consumerId, config.leaseMs);
     if (!entry) continue;
     let acknowledge = false;
     try {
@@ -57,7 +57,7 @@ export async function runWorker(
       const heartbeat = (async () => {
         while (
           await waitForHeartbeat(
-            Math.max(1_000, Math.floor(config.leaseMs / 3)),
+            Math.max(250, Math.min(1_000, Math.floor(config.leaseMs / 3))),
             heartbeatAbort.signal,
           )
         ) {

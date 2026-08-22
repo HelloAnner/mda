@@ -15,6 +15,7 @@ import {
   AgentJobTransitionError,
   assertActiveLease,
   claimJob,
+  recoverExpiredJob,
   renewJobLease,
   requestJobCancellation,
   settleJob,
@@ -313,6 +314,26 @@ export async function authorizeAgentJobLease(
     transitionError(error);
   }
   return { tenantId: String(row.tenant_id), userId: String(row.created_by) };
+}
+
+export async function listAgentJobs(
+  db: SQL,
+  tenantId: string,
+  dashboardId: string | undefined,
+  limit: number,
+): Promise<AgentJob[]> {
+  const rows = await db`
+    SELECT id, dashboard_id, session_id, purpose, state, attempt_count,
+      lease_owner, fencing_token, lease_expires_at,
+      cancellation_requested_at, terminal_error, version, created_at,
+      started_at, finished_at
+    FROM agent_jobs
+    WHERE tenant_id = ${tenantId}
+      AND (${dashboardId ?? null}::text IS NULL OR dashboard_id = ${dashboardId ?? null})
+    ORDER BY created_at DESC, id DESC
+    LIMIT ${limit}
+  `;
+  return [...rows].map((row) => toAgentJob(row as Row));
 }
 
 export async function getAgentJobPrincipal(
@@ -622,6 +643,65 @@ export async function settleAgentJob(
   } catch (error) {
     transitionError(error);
   }
+}
+
+export async function recoverExpiredAgentJobs(
+  db: SQL,
+  limit = 100,
+  now = new Date(),
+): Promise<number> {
+  return db.begin(async (transaction) => {
+    const rows = await transaction`
+      SELECT id, dashboard_id, session_id, purpose, prompt_text, state,
+        attempt_count, lease_owner, fencing_token, lease_expires_at,
+        cancellation_requested_at, terminal_error, version, created_at,
+        started_at, finished_at
+      FROM agent_jobs
+      WHERE state IN ('leased', 'running') AND lease_expires_at <= ${now.toISOString()}
+      ORDER BY lease_expires_at, id
+      LIMIT ${limit}
+      FOR UPDATE SKIP LOCKED
+    `;
+    let recovered = 0;
+    for (const value of rows) {
+      const row = value as Row;
+      const previous = toAggregate(row);
+      let next: AgentJobAggregate;
+      try {
+        next = recoverExpiredJob(previous, now);
+      } catch {
+        continue;
+      }
+      await updateJob(transaction, previous, next);
+      if (next.state === "queued") {
+        const event = {
+          id: `event_${crypto.randomUUID()}`,
+          type: "agent.job-queued",
+          schemaVersion: 1,
+          tenantId: String(
+            (
+              await transaction`
+                SELECT tenant_id FROM agent_jobs WHERE id = ${previous.id}
+              `
+            )[0]?.tenant_id,
+          ),
+          aggregateId: previous.id,
+          aggregateVersion: next.version,
+          occurredAt: now.toISOString(),
+          requestId: `recovery:${previous.id}:${next.fencingToken}`,
+          data: { jobId: previous.id, attempt: next.attemptCount + 1 },
+        };
+        await transaction`
+          INSERT INTO control_outbox (
+            id, tenant_id, event_type, aggregate_id, payload, occurred_at
+          ) VALUES (${event.id}, ${event.tenantId}, ${event.type},
+            ${previous.id}, ${JSON.stringify(event)}::jsonb, ${event.occurredAt})
+        `;
+      }
+      recovered += 1;
+    }
+    return recovered;
+  });
 }
 
 export async function cancelAgentJob(

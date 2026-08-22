@@ -81,6 +81,11 @@ export const AgentJobSchema = Type.Object(
   { $id: "AgentJobV1", additionalProperties: false },
 );
 
+export const AgentJobListResponseSchema = Type.Object(
+  { items: Type.Array(AgentJobSchema, { maxItems: 100 }) },
+  { additionalProperties: false },
+);
+
 export const CreateAgentJobRequestSchema = Type.Object(
   {
     message: Type.String({ minLength: 1, maxLength: 20_000, pattern: "\\S" }),
@@ -92,6 +97,7 @@ export const CreateAgentJobRequestSchema = Type.Object(
 export type AgentEvent = Static<typeof AgentEventSchema>;
 export type AgentEventType = Static<typeof AgentEventTypeSchema>;
 export type AgentJob = Static<typeof AgentJobSchema>;
+export type AgentJobListResponse = Static<typeof AgentJobListResponseSchema>;
 export type AgentJobPurpose = Static<typeof AgentJobPurposeSchema>;
 export type AgentJobState = Static<typeof AgentJobStateSchema>;
 export type AgentSession = Static<typeof AgentSessionSchema>;

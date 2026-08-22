@@ -1,4 +1,5 @@
 import type { RedisClient, SQL } from "bun";
+import { recoverExpiredAgentJobs } from "./postgres.ts";
 
 const stream = "mda:agent-jobs";
 
@@ -47,8 +48,9 @@ export function startAgentJobDispatcher(
   void (async () => {
     while (!controller.signal.aborted) {
       try {
+        const recovered = await recoverExpiredAgentJobs(db);
         const delivered = await dispatchAgentJobs(db, redis);
-        if (delivered === 0) await Bun.sleep(250);
+        if (delivered === 0 && recovered === 0) await Bun.sleep(250);
       } catch (error) {
         console.error(
           JSON.stringify({

@@ -4,6 +4,9 @@ import { existsSync } from "node:fs";
 import { rename, rm } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import {
+  type AgentJob,
+  AgentJobListResponseSchema,
+  AgentJobSchema,
   CreateDashboardPreviewResponseSchema,
   CreatePublicationResponseSchema,
   CreateShareLinkResponseSchema,
@@ -73,6 +76,10 @@ Commands:
   query show <query-id>
   query register --config <json-file>
   query test <query-id> [--params <json-file>]
+  job list [--dashboard <dashboard-id>]
+  job show <job-id>
+  job watch <job-id>
+  job cancel <job-id>
 
 Global options:
   --api-url <url>  Control Plane URL
@@ -110,6 +117,19 @@ function parseDuration(value: string): number | undefined {
   return Number.isSafeInteger(seconds) && seconds >= 60 && seconds <= 31_536_000
     ? seconds
     : undefined;
+}
+
+function printJob(job: AgentJob): void {
+  console.log(
+    [
+      job.id,
+      job.purpose,
+      job.state,
+      job.dashboardId,
+      job.sessionId,
+      job.createdAt,
+    ].join("\t"),
+  );
 }
 
 function printDashboard(dashboard: Dashboard): void {
@@ -247,6 +267,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
     parsed.positionals[0] !== "share" &&
     parsed.positionals[0] !== "source" &&
     parsed.positionals[0] !== "query" &&
+    parsed.positionals[0] !== "job" &&
     parsed.positionals[0] !== "chat"
   ) {
     console.error(`Unknown command: ${parsed.positionals.join(" ")}`);
@@ -552,6 +573,60 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
 
       console.error(
         `Unknown share command: ${parsed.positionals.slice(1).join(" ")}`,
+      );
+      return 2;
+    }
+
+    if (parsed.positionals[0] === "job") {
+      if (action === "list" && parsed.positionals.length === 2) {
+        const dashboardId = stringValue(parsed.values.dashboard);
+        const body = await apiRequest(
+          config,
+          `/api/agent-jobs?limit=50${dashboardId ? `&dashboardId=${encodeURIComponent(dashboardId)}` : ""}`,
+        );
+        if (!Value.Check(AgentJobListResponseSchema, body)) {
+          throw new Error("Control Plane returned invalid Agent Job data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else body.items.forEach(printJob);
+        return 0;
+      }
+      if (
+        ["show", "watch", "cancel"].includes(action ?? "") &&
+        parsed.positionals.length === 3
+      ) {
+        const jobId = parsed.positionals[2] ?? "";
+        if (action === "cancel") {
+          const body = await apiRequest(
+            config,
+            `/api/agent-jobs/${encodeURIComponent(jobId)}/cancel`,
+            { method: "POST", body: JSON.stringify({}) },
+          );
+          if (!Value.Check(AgentJobSchema, body)) {
+            throw new Error("Control Plane returned invalid Agent Job data");
+          }
+          if (output === "json") console.log(JSON.stringify(body));
+          else printJob(body);
+          return 0;
+        }
+        const body = await apiRequest(
+          config,
+          `/api/agent-jobs/${encodeURIComponent(jobId)}`,
+        );
+        if (!Value.Check(AgentJobSchema, body)) {
+          throw new Error("Control Plane returned invalid Agent Job data");
+        }
+        if (action === "watch") {
+          const final = await watchJob(config, body);
+          if (output === "json") console.log(JSON.stringify(final));
+          return ["failed", "cancelled"].includes(final.state) ? 6 : 0;
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else printJob(body);
+        return 0;
+      }
+      console.error(
+        `Unknown job command: ${parsed.positionals.slice(1).join(" ")}`,
       );
       return 2;
     }
