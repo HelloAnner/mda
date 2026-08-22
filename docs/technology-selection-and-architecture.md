@@ -247,15 +247,13 @@ mda/
 │   ├── cli/                  # Bun CLI executable named mda
 │   ├── control-plane/        # Bun HTTP API, SSE, Dashboard orchestration
 │   ├── data-source-service/  # CRUD, HTTP/JDBC connectors, Query execution
-│   └── agent/                # Independent mda-agent image and Pi SDK worker
+│   └── agent/                # Pi worker plus reviewed progressive Dashboard Skills
 ├── connectors/
 │   └── jdbc-runner/          # Isolated JVM JDBC interoperability runtime
 ├── packages/
 │   ├── contracts/            # TypeBox schemas and shared API types
 │   ├── dashboard-runtime/    # iframe/runtime API used by generated src
 │   └── dashboard-template/   # Fixed build shell; Agent owns src
-├── skills/
-│   └── dashboard-aesthetics/ # Design guidance, no component restrictions
 ├── migrations/
 │   ├── control-plane/        # Main-owned ordered PostgreSQL migrations
 │   └── data-source/          # Data Source-owned ordered PostgreSQL migrations
@@ -313,7 +311,7 @@ The platform owns:
 - Sandbox and network policy.
 - Published artifact handling.
 
-The platform does not parse the component tree, choose controls, prescribe chart types, or rewrite generated source. The aesthetics Skill supplies guidance only.
+The platform does not parse the component tree, choose controls, prescribe chart types, or rewrite generated source. The layered Dashboard Skills under `apps/agent/skills` supply mandatory quality foundations plus optional presentation and industry know-how. They guide judgment only; `docs/dashboard-skills/skill-system.md` is the catalog contract.
 
 ### 9.4 No Direct Cross-Boundary Access
 
@@ -475,7 +473,7 @@ The Runner creates one `AgentSession` with:
 - A job-specific session directory.
 - Explicit model selection.
 - Explicit `ResourceLoader`.
-- Platform-maintained aesthetics Skill.
+- Platform-maintained foundational, presentation, and industry Dashboard Skills.
 - Platform-maintained custom Tools.
 - An explicit Tool allowlist.
 - Controlled settings for retry and compaction.
@@ -557,7 +555,7 @@ The template provides only:
 
 The template does not provide a required component tree or layout DSL.
 
-The aesthetics Skill guides visual quality. It does not override the Agent's component choices.
+The Dashboard Skills guide visual quality and industry semantics. They do not override the Agent's component, chart, layout, interaction, or source-structure choices.
 
 ## 16. Preview Architecture
 
@@ -909,7 +907,7 @@ The architecture is acceptable when:
 8. Agent events survive browser reconnects.
 9. Dashboard and Query Revisions are immutable once published.
 10. The standalone Data Source Service describes data without describing components and owns HTTP/JDBC connector execution.
-11. The aesthetics Skill guides appearance without defining a component schema.
+11. The layered Dashboard Skills guide quality and industry semantics without defining a component schema or catalog.
 12. The Coding Agent retains full control over `src/**` and `public/**`.
 13. The system uses PostgreSQL as authority and Redis for Streams, notifications, bounded coordination, and optional cache without requiring Kafka, Kubernetes, an ORM, or a low-code DSL.
 14. The `mda` CLI reaches feature parity through the same Control Plane API and stable event contracts used by the web client.

@@ -508,7 +508,7 @@ interface RuntimeQueryError {
 
 The generated source may continue displaying the previous result, replace it, annotate it as stale, or show another experience. That presentation decision belongs to the Coding Agent.
 
-The aesthetics Skill should encourage clear refreshing, stale, and failure states without requiring any specific component.
+The foundational Dashboard Skills require clear refreshing, stale, partial, and failure states without requiring any specific component; see `docs/dashboard-skills/skill-system.md`.
 
 ## 15. Authorization on Every Refresh
 

@@ -67,6 +67,7 @@ This file tracks implementation status. The detailed contracts and architecture 
 - [x] Create or restore one independent Pi `AgentSession` and SessionManager file per MDA Session.
 - [x] Configure the OpenAI-compatible model endpoint and Agent-only API key from `mda.toml` references.
 - [x] Use an explicit restricted ResourceLoader, platform Skill root, and Coding Tool allowlist.
+- [x] Add the layered Dashboard Skill system: three mandatory foundations, six presentation contexts, and fourteen industry know-how Skills without component or layout constraints.
 - [x] Persist coalesced Agent events and replay them through SSE.
 - [x] Add continuous `mda chat <dashboard-id>` with the Chinese-by-default Moss role, natural small talk, durable SSE reconnect, and multi-turn Session continuity.
 - [x] Build separate non-root `mda-main:0.1.0` and `mda-agent:0.1.0` images.
@@ -113,7 +114,7 @@ Continue the authoritative authoring and Agent Job path:
 - [x] Durable ordered Agent Events and SSE replay.
 - [x] Independently scalable `mda-agent` image consuming Redis Streams.
 - [x] Pi SDK integration pinned to the reviewed version.
-- [x] Explicit Pi `ResourceLoader`, Coding Tool allowlist, platform-maintained Chinese dashboard Skill, and read-only Data Source summary prompt section.
+- [x] Explicit Pi `ResourceLoader`, Coding Tool allowlist, platform-maintained progressive Dashboard Skill catalog, and read-only Data Source summary prompt section.
 - [x] Restrict Moss's business operations to Dashboard generation; Data Source management stays outside its Tool boundary.
 - [ ] Agent Tools for source discovery, queries, validation, preview, and publishing.
 - [ ] Workspace restore, checkpoint, build, upload, settlement, and cleanup flow.

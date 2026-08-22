@@ -17,6 +17,27 @@ export type PiModelRuntime = {
   model: NonNullable<ReturnType<ModelRuntime["getModel"]>>;
 };
 
+export const mandatoryDashboardSkills = [
+  "dashboard-coding",
+  "dashboard-foundations",
+  "dashboard-data-communication",
+] as const;
+
+export function loadDashboardSkills(skillsRoot: string) {
+  const result = loadSkillsFromDir({
+    dir: skillsRoot,
+    source: "mda-platform",
+  });
+  if (result.diagnostics.length) {
+    throw new Error(
+      `Invalid dashboard Skill catalog: ${result.diagnostics
+        .map(({ path, message }) => `${path}: ${message}`)
+        .join("; ")}`,
+    );
+  }
+  return result;
+}
+
 export async function createPiModelRuntime(
   config: AgentConfig,
 ): Promise<PiModelRuntime> {
@@ -92,10 +113,7 @@ function resourceLoader(
   skillsRoot: string,
   dataSources: AgentDataSourceContext,
 ): ResourceLoader {
-  const skills = loadSkillsFromDir({
-    dir: skillsRoot,
-    source: "mda-platform",
-  });
+  const skills = loadDashboardSkills(skillsRoot);
   const dataSourceSummary =
     dataSources.status === "not-configured"
       ? "尚未配置数据源服务。请使用明确标注的模拟数据或空状态，绝不能声称数据是实时的。"
@@ -109,11 +127,6 @@ function resourceLoader(
                   `- ${source.name}（${source.id}）：类型 ${source.kind}，状态 ${source.status}，Schema 修订版 ${source.schemaRevision}${source.description ? ` — ${source.description}` : ""}`,
               )
               .join("\n");
-  const skillSummary = skills.skills.length
-    ? skills.skills
-        .map((skill) => `- ${skill.name}: ${skill.description}`)
-        .join("\n")
-    : "未配置平台 Skill。";
   const systemPrompt = `你是 Moss，一名专业的看板生成与编程助手，也是能够持续多轮对话的协作伙伴。
 
 默认使用中文回复；只有用户明确要求其他语言时才切换。自然回应问候、闲聊和一般问题，记住当前 Session 中之前的消息。用户需要创建或修改看板时，先理解目标，再生成清晰、专业、可访问且响应式的实现。仅在任务确有需要时调用工具。所有文件操作必须位于当前 Session 工作区；遵循相关平台 Skill；完成修改后先验证，再如实报告结果。不要虚构工具执行、浏览器预览、发布状态、数据源或实时数据。
@@ -123,8 +136,10 @@ function resourceLoader(
 ## 数据源摘要
 ${dataSourceSummary}
 
-## 平台 Skills
-${skillSummary}
+## Skill 使用规则
+创建、修改、检查或修复任何看板时，必须先用 read 工具读取这三个基础 Skill：${mandatoryDashboardSkills.join("、")}。然后根据用户目标和数据上下文，通常最多再读取一个匹配的呈现场景 Skill 和一个匹配的行业 Skill；没有明确匹配时只使用基础 Skill，绝不能硬套主题。
+
+Skill 只指导受众、信息、审美、数据语义、状态和注意事项。它们绝不构成组件目录、图表注册表、固定网格、JSON UI Schema 或文件模板。你仍应自由创建最适合任务的组件、布局和交互。
 
 ## 可用工具
 ${codingTools.join(", ")}`;

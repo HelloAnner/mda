@@ -40,18 +40,19 @@ The Coding Agent controls:
 - Cross-filtering, drill-downs, animations, and interactions.
 - The SQL or other read-only query definitions used by the dashboard.
 
-### 2.3 Dashboard Aesthetics Skill
+### 2.3 Dashboard Skill System
 
-The dashboard Skill may instruct the Coding Agent to produce:
+The layered Dashboard Skills may guide the Coding Agent toward:
 
 - Clear information hierarchy.
 - Consistent spacing and typography.
 - Responsive layouts.
 - Accessible colors and controls.
-- Appropriate loading, empty, and failure states.
-- Suitable visualizations for the available data.
+- Complete loading, empty, stale, partial, and failure states.
+- Truthful expressions for the available data relationships.
+- Relevant presentation context and industry semantics.
 
-These are design instructions, not a component schema. The Skill must not require a fixed grid, chart library, component tree, or visual DSL.
+These are judgment instructions, not a component schema. No Skill may require a fixed grid, chart library, component tree, visual DSL, or source structure. The catalog contract is `docs/dashboard-skills/skill-system.md`.
 
 ## 3. Explicit Non-Goals
 
@@ -610,7 +611,7 @@ The contract is satisfied when:
 12. Source failures return structured, sanitized errors and preserve freshness context.
 13. `src/` may render the same result using any components or interactions.
 14. Changing a filter, chart, layout, or component requires only Coding Agent changes to `src/`, not changes to the Data Gateway contract.
-15. A dashboard aesthetics Skill may guide quality without imposing a component schema.
+15. Layered Dashboard Skills may guide quality and industry semantics without imposing a component schema.
 
 ## 21. Next Design
 

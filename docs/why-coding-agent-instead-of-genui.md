@@ -479,29 +479,29 @@ The Coding Agent may turn the same rows into:
 - A keyboard-driven explorer.
 - Something not anticipated by the platform team.
 
-## 10. The Aesthetics Skill Is Not GenUI
+## 10. The Dashboard Skill System Is Not GenUI
 
-MDA provides a dashboard aesthetics Skill to improve quality.
+MDA provides layered Dashboard Skills to improve quality. Universal foundations are mandatory for dashboard work; presentation and industry Skills load only when their descriptions match the user goal. The full contract is `docs/dashboard-skills/skill-system.md`.
 
-The Skill may say:
+The Skills may explain:
 
-- Establish a clear visual hierarchy.
-- Use consistent spacing.
-- Choose readable typography.
-- Ensure mobile usability.
-- Use accessible contrast.
-- Handle loading, empty, and error states.
-- Select a visualization appropriate to the data and user goal.
+- How to establish audience, decision, and visual hierarchy.
+- How to use spacing, typography, alignment, color, and motion with restraint.
+- How to preserve mobile usability, accessibility, and complete data states.
+- How to choose among several truthful expressions for a data relationship.
+- Which information, definitions, comparisons, risks, and caveats matter in a specific industry.
+- How executive, operational, analytical, editorial, wallboard, and mobile contexts change reading priorities.
 
-The Skill must not say:
+The Skills must not say:
 
 - Use the platform's `MetricCard` component.
 - Use a twelve-column platform grid.
 - Emit a specific component JSON tree.
 - Use a line chart for every time series.
-- Restrict the page to registered components.
+- Restrict the page to registered components, layouts, or source structures.
+- Make an industry dashboard imitate a cosmetic stereotype.
 
-A Skill guides judgment. GenUI constrains representation. MDA uses the former and rejects the latter as a mandatory architecture.
+A Skill guides judgment and domain credibility. GenUI constrains representation. MDA uses the former and rejects the latter as a mandatory architecture.
 
 ## 11. Guardrails Without GenUI
 
@@ -719,7 +719,7 @@ This decision remains satisfied when:
 6. Users can inspect Diffs, Tool calls, errors, logs, and Revisions.
 7. Users can export a normal TypeScript project.
 8. Data Source responses contain data descriptions, not presentation instructions.
-9. The aesthetics Skill improves quality without defining components.
+9. The layered Dashboard Skills improve aesthetics and domain credibility without defining components.
 10. Security restrictions constrain capabilities rather than visual design.
 11. Published pages run without invoking Pi.
 12. The system can create any page or dashboard supported by the browser runtime and authorized data, not merely templates anticipated by the platform team.

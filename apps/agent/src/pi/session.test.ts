@@ -5,6 +5,8 @@ import { join } from "node:path";
 import type { AgentConfig } from "../config.ts";
 import {
   createPiModelRuntime,
+  loadDashboardSkills,
+  mandatoryDashboardSkills,
   resolveSessionPaths,
   runPiSession,
 } from "./session.ts";
@@ -20,6 +22,44 @@ test("isolates Session paths and rejects traversal", () => {
   expect(() =>
     resolveSessionPaths("/workspace", "dashboard_1", "../../escape"),
   ).toThrow("Invalid Agent workspace identifier");
+});
+
+test("loads the reviewed dashboard Skill catalog without diagnostics", () => {
+  const { skills, diagnostics } = loadDashboardSkills(
+    new URL("../../skills", import.meta.url).pathname,
+  );
+
+  expect(diagnostics).toEqual([]);
+  expect(skills.map(({ name }) => name).sort()).toEqual([
+    "dashboard-analytical",
+    "dashboard-coding",
+    "dashboard-cybersecurity",
+    "dashboard-data-communication",
+    "dashboard-ecommerce",
+    "dashboard-executive",
+    "dashboard-finance",
+    "dashboard-foundations",
+    "dashboard-healthcare",
+    "dashboard-manufacturing",
+    "dashboard-marketing",
+    "dashboard-mobile",
+    "dashboard-operations",
+    "dashboard-people",
+    "dashboard-product",
+    "dashboard-project-portfolio",
+    "dashboard-public-sector",
+    "dashboard-sales",
+    "dashboard-storytelling",
+    "dashboard-supply-chain",
+    "dashboard-support",
+    "dashboard-sustainability",
+    "dashboard-wallboard",
+  ]);
+  expect(mandatoryDashboardSkills).toEqual([
+    "dashboard-coding",
+    "dashboard-foundations",
+    "dashboard-data-communication",
+  ]);
 });
 
 test("streams a real Pi SDK session through the configured LLM API", async () => {
@@ -121,6 +161,14 @@ test("streams a real Pi SDK session through the configured LLM API", async () =>
       "你是 Moss，一名专业的看板生成与编程助手",
     );
     expect(JSON.stringify(requestBodies[0])).toContain("dashboard-coding");
+    expect(JSON.stringify(requestBodies[0])).toContain("dashboard-foundations");
+    expect(JSON.stringify(requestBodies[0])).toContain(
+      "dashboard-data-communication",
+    );
+    expect(JSON.stringify(requestBodies[0])).toContain("dashboard-executive");
+    expect(JSON.stringify(requestBodies[0])).toContain(
+      "绝不构成组件目录、图表注册表、固定网格、JSON UI Schema 或文件模板",
+    );
     expect(JSON.stringify(requestBodies[0])).toContain("尚未配置数据源服务");
     expect(JSON.stringify(requestBodies[0])).toContain(
       "read, bash, write, edit, grep, find, ls",

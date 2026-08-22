@@ -1080,15 +1080,13 @@ mda/
 │   ├── cli/                         # Public Control Plane API adapter
 │   ├── control-plane/               # mda-main domain/application/adapters
 │   ├── data-source-service/         # mda-datasource domain/application/adapters
-│   └── agent/                       # mda-agent execution worker
+│   └── agent/                       # mda-agent worker and reviewed Dashboard Skills
 ├── connectors/
 │   └── jdbc-runner/                 # JVM adapter for JDBC interoperability
 ├── packages/
 │   ├── contracts/                   # Versioned transport Shared Kernel
 │   ├── dashboard-runtime/           # Generated-page runtime adapter
 │   └── dashboard-template/          # Platform-owned build shell
-├── skills/
-│   └── dashboard-aesthetics/
 ├── migrations/
 │   ├── control-plane/
 │   └── data-source/
