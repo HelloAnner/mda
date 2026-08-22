@@ -95,6 +95,8 @@ beforeAll(async () => {
     internalAgentToken: "test-internal-agent-token-32-bytes",
     agentLeaseMs: 30_000,
     artifacts,
+    previewSigningKey: "test-preview-signing-key-at-least-32-bytes",
+    previewTtlSeconds: 3_600,
   });
   baseUrl = `http://127.0.0.1:${server.port}`;
 });
@@ -118,7 +120,7 @@ integrationTest("enqueues and fences authoritative Agent work", async () => {
   const first = await enqueue();
   expect(first.status).toBe(202);
   const queued = await first.json();
-  expect(queued.state).toBe("queued");
+  expect(queued).toMatchObject({ state: "queued", purpose: "edit" });
   expect(queued.prompt).toBeUndefined();
 
   const replay = await enqueue();

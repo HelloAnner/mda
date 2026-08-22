@@ -94,6 +94,27 @@ function assertLease(
   }
 }
 
+async function checkpointById(
+  db: SQL,
+  tenantId: string,
+  dashboardId: string,
+  checkpointId: string,
+): Promise<CheckpointRecord | undefined> {
+  const rows = await db`
+    SELECT id, tenant_id, dashboard_id, session_id, job_id,
+      parent_checkpoint_id, artifact_key, content_digest,
+      file_count, total_bytes, created_at
+    FROM draft_checkpoints
+    WHERE tenant_id = ${tenantId}
+      AND dashboard_id = ${dashboardId}
+      AND id = ${checkpointId}
+      AND status = 'active'
+    LIMIT 1
+  `;
+  const row = rows[0] as Row | undefined;
+  return row ? toCheckpoint(row) : undefined;
+}
+
 async function latestCheckpoint(
   db: SQL,
   tenantId: string,
@@ -121,8 +142,8 @@ export async function getAgentCheckpointContext(
   now = new Date(),
 ): Promise<AgentCheckpointContext> {
   const rows = await db`
-    SELECT tenant_id, dashboard_id, session_id, created_by, state,
-      lease_owner, fencing_token, lease_expires_at
+    SELECT tenant_id, dashboard_id, session_id, created_by, purpose,
+      source_checkpoint_id, state, lease_owner, fencing_token, lease_expires_at
     FROM agent_jobs
     WHERE id = ${jobId}
     LIMIT 1
@@ -131,10 +152,26 @@ export async function getAgentCheckpointContext(
   if (!row) {
     throw new HttpError(404, "AGENT_JOB_NOT_FOUND", "Agent Job not found");
   }
-  if (command) assertLease(row, command, now);
+  if (command) {
+    assertLease(row, command, now);
+    if (row.purpose !== "edit") {
+      throw new HttpError(
+        409,
+        "JOB_NOT_CHECKPOINTABLE",
+        "Only edit Jobs may create source Checkpoints",
+      );
+    }
+  }
   const tenantId = String(row.tenant_id);
   const dashboardId = String(row.dashboard_id);
-  const latest = await latestCheckpoint(db, tenantId, dashboardId);
+  const latest = row.source_checkpoint_id
+    ? await checkpointById(
+        db,
+        tenantId,
+        dashboardId,
+        String(row.source_checkpoint_id),
+      )
+    : await latestCheckpoint(db, tenantId, dashboardId);
   return {
     tenantId,
     dashboardId,

@@ -1,5 +1,11 @@
 import { type Static, Type } from "@sinclair/typebox";
 
+export const AgentJobPurposeSchema = Type.Union([
+  Type.Literal("edit"),
+  Type.Literal("preview"),
+  Type.Literal("publish"),
+]);
+
 export const AgentJobStateSchema = Type.Union([
   Type.Literal("queued"),
   Type.Literal("leased"),
@@ -16,6 +22,10 @@ export const AgentEventTypeSchema = Type.Union([
   Type.Literal("tool.started"),
   Type.Literal("tool.completed"),
   Type.Literal("draft.checkpoint.saved"),
+  Type.Literal("build.started"),
+  Type.Literal("validation.completed"),
+  Type.Literal("build.completed"),
+  Type.Literal("preview.ready"),
   Type.Literal("agent.failed"),
   Type.Literal("agent.completed"),
 ]);
@@ -57,6 +67,7 @@ export const AgentJobSchema = Type.Object(
     id: Type.String({ minLength: 1 }),
     dashboardId: Type.String({ minLength: 1 }),
     sessionId: Type.String({ minLength: 1 }),
+    purpose: AgentJobPurposeSchema,
     state: AgentJobStateSchema,
     attemptCount: Type.Integer({ minimum: 0 }),
     cancellationRequestedAt: Type.Optional(Type.String({ minLength: 1 })),
@@ -80,6 +91,7 @@ export const CreateAgentJobRequestSchema = Type.Object(
 export type AgentEvent = Static<typeof AgentEventSchema>;
 export type AgentEventType = Static<typeof AgentEventTypeSchema>;
 export type AgentJob = Static<typeof AgentJobSchema>;
+export type AgentJobPurpose = Static<typeof AgentJobPurposeSchema>;
 export type AgentJobState = Static<typeof AgentJobStateSchema>;
 export type AgentSession = Static<typeof AgentSessionSchema>;
 export type AgentTerminalError = Static<typeof AgentTerminalErrorSchema>;

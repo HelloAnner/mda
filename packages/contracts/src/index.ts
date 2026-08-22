@@ -20,6 +20,12 @@ export {
   SettleAgentJobRequestSchema,
 } from "./internal/agent/v1/jobs.ts";
 export {
+  type UploadDashboardPreviewRequest,
+  UploadDashboardPreviewRequestSchema,
+  type UploadDashboardPreviewResponse,
+  UploadDashboardPreviewResponseSchema,
+} from "./internal/agent/v1/previews.ts";
+export {
   type AgentWorkspaceRestore,
   AgentWorkspaceRestoreSchema,
   type CheckpointAgentWorkspaceRequest,
@@ -37,6 +43,8 @@ export {
   type AgentEventType,
   AgentEventTypeSchema,
   type AgentJob,
+  type AgentJobPurpose,
+  AgentJobPurposeSchema,
   AgentJobSchema,
   type AgentJobState,
   AgentJobStateSchema,
@@ -55,6 +63,24 @@ export {
   DashboardListResponseSchema,
   DashboardSchema,
 } from "./public/v1/dashboards.ts";
+export {
+  type CreateDashboardPreviewRequest,
+  CreateDashboardPreviewRequestSchema,
+  type CreateDashboardPreviewResponse,
+  CreateDashboardPreviewResponseSchema,
+  type DashboardBuildArtifact,
+  DashboardBuildArtifactSchema,
+  type DashboardBuildFile,
+  DashboardBuildFileSchema,
+  type DashboardManifest,
+  DashboardManifestSchema,
+  type DashboardPreview,
+  type DashboardPreviewListResponse,
+  DashboardPreviewListResponseSchema,
+  DashboardPreviewSchema,
+  type DashboardValidationIssue,
+  DashboardValidationIssueSchema,
+} from "./public/v1/previews.ts";
 export {
   type CreateDashboardRevisionRequest,
   CreateDashboardRevisionRequestSchema,

@@ -17,6 +17,10 @@ region = "us-east-1"
 access_key_env = "S3_ACCESS_KEY_ID"
 secret_key_env = "S3_SECRET_ACCESS_KEY"
 
+[preview]
+signing_key_env = "MDA_PREVIEW_SIGNING_KEY"
+ttl_seconds = 3600
+
 [auth]
 mode = "password"
 tenant_id = "local"

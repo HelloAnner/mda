@@ -10,6 +10,7 @@ import { loadConfig } from "./config.ts";
 import { startAgentJobDispatcher } from "./contexts/agent-work/dispatch.ts";
 import { handleAgentWorkRequest } from "./contexts/agent-work/routes.ts";
 import { handleDashboardRequest } from "./contexts/dashboards/routes.ts";
+import { handlePreviewRequest } from "./contexts/previews/routes.ts";
 import { handleRevisionRequest } from "./contexts/revisions/routes.ts";
 import { type ArtifactStore, S3ArtifactStore } from "./shared/artifacts.ts";
 import {
@@ -42,6 +43,8 @@ interface ServerDependencies {
   accessPassword?: string;
   redis?: RedisClient;
   artifacts?: ArtifactStore;
+  previewSigningKey?: string;
+  previewTtlSeconds?: number;
 }
 
 export function startServer(
@@ -93,6 +96,11 @@ export function startServer(
             );
           }
         }
+        const previewResponse = await handlePreviewRequest(
+          request,
+          dependencies,
+        );
+        if (previewResponse) return previewResponse;
         const agentResponse = await handleAgentWorkRequest(
           request,
           dependencies,
@@ -157,6 +165,8 @@ if (import.meta.main) {
     accessPassword: config.accessPassword,
     redis,
     artifacts,
+    previewSigningKey: config.previewSigningKey,
+    previewTtlSeconds: config.previewTtlSeconds,
   });
   console.log(
     JSON.stringify({

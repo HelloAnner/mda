@@ -63,12 +63,13 @@ function toAggregate(row: Row): AgentJobAggregate {
   };
 }
 
-function toAgentJob(row: Row): AgentJob {
+export function toAgentJob(row: Row): AgentJob {
   const aggregate = toAggregate(row);
   return {
     id: aggregate.id,
     dashboardId: String(row.dashboard_id),
     sessionId: String(row.session_id),
+    purpose: row.purpose as AgentJob["purpose"],
     state: aggregate.state,
     attemptCount: aggregate.attemptCount,
     ...(aggregate.cancellationRequestedAt
@@ -109,7 +110,7 @@ async function updateJob(
         started_at = ${next.startedAt ?? null},
         finished_at = ${next.finishedAt ?? null}
     WHERE id = ${previous.id} AND version = ${previous.version}
-    RETURNING id, dashboard_id, session_id, prompt_text, state,
+    RETURNING id, dashboard_id, session_id, purpose, prompt_text, state,
       attempt_count, lease_owner, fencing_token, lease_expires_at,
       cancellation_requested_at, terminal_error, version, created_at,
       started_at, finished_at
@@ -126,7 +127,7 @@ async function lockedJob(
 ): Promise<Row> {
   const rows = tenantId
     ? await transaction`
-        SELECT id, dashboard_id, session_id, prompt_text, state,
+        SELECT id, dashboard_id, session_id, purpose, prompt_text, state,
           attempt_count, lease_owner, fencing_token, lease_expires_at,
           cancellation_requested_at, terminal_error, version, created_at,
           started_at, finished_at
@@ -135,7 +136,7 @@ async function lockedJob(
         FOR UPDATE
       `
     : await transaction`
-        SELECT id, dashboard_id, session_id, prompt_text, state,
+        SELECT id, dashboard_id, session_id, purpose, prompt_text, state,
           attempt_count, lease_owner, fencing_token, lease_expires_at,
           cancellation_requested_at, terminal_error, version, created_at,
           started_at, finished_at
@@ -173,7 +174,7 @@ export async function enqueueAgentJob(
       });
       if (existingResultId) {
         const existing = await transaction`
-          SELECT id, dashboard_id, session_id, state, attempt_count,
+          SELECT id, dashboard_id, session_id, purpose, state, attempt_count,
             lease_owner, fencing_token, lease_expires_at,
             cancellation_requested_at, terminal_error, version, created_at,
             started_at, finished_at
@@ -230,7 +231,7 @@ export async function enqueueAgentJob(
           ${input.message.trim()}, 'queued', 0, 0, 1,
           ${principal.userId}, ${timestamp}
         )
-        RETURNING id, dashboard_id, session_id, state, attempt_count,
+        RETURNING id, dashboard_id, session_id, purpose, state, attempt_count,
           lease_owner, fencing_token, lease_expires_at,
           cancellation_requested_at, terminal_error, version, created_at,
           started_at, finished_at
@@ -291,7 +292,7 @@ export async function getAgentJob(
   id: string,
 ): Promise<AgentJob | undefined> {
   const rows = await db`
-    SELECT id, dashboard_id, session_id, state, attempt_count,
+    SELECT id, dashboard_id, session_id, purpose, state, attempt_count,
       lease_owner, fencing_token, lease_expires_at,
       cancellation_requested_at, terminal_error, version, created_at,
       started_at, finished_at
@@ -319,10 +320,25 @@ export async function claimAgentJob(
         claimJob(previous, owner, now, leaseMs),
       );
       const persisted = toAggregate(updated);
+      const previews = await transaction`
+        SELECT id, source_digest
+        FROM dashboard_previews
+        WHERE job_id = ${id} AND status = 'building'
+        LIMIT 1
+      `;
+      const preview = previews[0] as Row | undefined;
       return {
         job: toAgentJob(updated),
         prompt: String(row.prompt_text),
         dataSources: { status: "not-configured", items: [] },
+        ...(preview
+          ? {
+              preview: {
+                id: String(preview.id),
+                sourceDigest: String(preview.source_digest),
+              },
+            }
+          : {}),
         lease: {
           owner,
           fencingToken: persisted.fencingToken,
@@ -460,6 +476,44 @@ export async function settleAgentJob(
               })}::jsonb,
               ${now.toISOString()}
             )
+          `;
+        }
+      }
+      if (row.purpose === "preview") {
+        const previews = await transaction`
+          SELECT id, status FROM dashboard_previews
+          WHERE job_id = ${id}
+          ORDER BY created_at DESC
+          LIMIT 1
+          FOR UPDATE
+        `;
+        const preview = previews[0] as Row | undefined;
+        if (command.state === "succeeded" && preview?.status !== "ready") {
+          throw new HttpError(
+            409,
+            "PREVIEW_NOT_READY",
+            "Preview Job cannot succeed without a validated build",
+          );
+        }
+        if (command.state !== "succeeded" && preview?.status === "building") {
+          const error =
+            command.error ??
+            (command.state === "cancelled"
+              ? {
+                  code: "CANCELLED",
+                  message: "Preview build was cancelled",
+                  retryable: false,
+                }
+              : {
+                  code: "PREVIEW_BUILD_FAILED",
+                  message: "Preview build failed",
+                  retryable: false,
+                });
+          await transaction`
+            UPDATE dashboard_previews
+            SET status = 'failed', terminal_error = ${JSON.stringify(error)}::jsonb,
+              completed_at = ${now.toISOString()}
+            WHERE id = ${String(preview.id)} AND status = 'building'
           `;
         }
       }

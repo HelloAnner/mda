@@ -1,3 +1,5 @@
+import type { DashboardBuildArtifact } from "@mda/contracts";
+import { buildDashboard, DashboardBuildError } from "@mda/dashboard-template";
 import { RedisClient } from "bun";
 import {
   ControlPlaneError,
@@ -76,22 +78,57 @@ export async function runWorker(
 
       const events = new AgentEventForwarder(client, entry.jobId, lease);
       try {
-        await runPiSession(config, piRuntime, {
-          dashboardId: claimed.job.dashboardId,
-          sessionId: claimed.job.sessionId,
-          prompt: claimed.prompt,
-          dataSources: claimed.dataSources,
-          ...(claimed.workspace
-            ? { workspaceSnapshot: claimed.workspace.snapshot }
-            : {}),
-          signal: runAbort.signal,
-          onEvent: (type, data) => events.push(type, data),
-        });
+        let previewArtifact: DashboardBuildArtifact | undefined;
+        if (claimed.job.purpose === "preview") {
+          if (!claimed.workspace || !claimed.preview) {
+            throw new Error("Preview Job has no pinned source");
+          }
+          events.push("agent.started", {});
+          events.push("build.started", { templateVersion: "1" });
+          try {
+            const result = await buildDashboard(
+              claimed.workspace.snapshot,
+              runAbort.signal,
+            );
+            previewArtifact = result.artifact;
+            events.push("validation.completed", {
+              status: "passed",
+              sourceDigest: result.artifact.sourceDigest,
+              manifestDigest: result.artifact.manifestDigest,
+            });
+            events.push("build.completed", {
+              status: "succeeded",
+              digest: result.artifact.digest,
+              fileCount: result.artifact.fileCount,
+              totalBytes: result.artifact.totalBytes,
+              durationMs: result.durationMs,
+            });
+          } catch (error) {
+            events.push("validation.completed", {
+              status: "failed",
+              message: safeError(error),
+            });
+            throw error;
+          }
+        } else {
+          const result = await runPiSession(config, piRuntime, {
+            dashboardId: claimed.job.dashboardId,
+            sessionId: claimed.job.sessionId,
+            prompt: claimed.prompt,
+            dataSources: claimed.dataSources,
+            ...(claimed.workspace
+              ? { workspaceSnapshot: claimed.workspace.snapshot }
+              : {}),
+            signal: runAbort.signal,
+            onEvent: (type, data) => events.push(type, data),
+          });
+          previewArtifact = result.previewArtifact;
+        }
         if (leaseLost) throw new Error("Agent lease lost");
 
         const current = await client.heartbeat(entry.jobId, lease);
         cancellationRequested ||= Boolean(current.cancellationRequestedAt);
-        if (!cancellationRequested) {
+        if (!cancellationRequested && claimed.job.purpose === "edit") {
           const workspace = resolveSessionPaths(
             config.workspaceRoot,
             claimed.job.dashboardId,
@@ -107,6 +144,18 @@ export async function runWorker(
               snapshot,
             });
           }
+        }
+        if (!cancellationRequested && previewArtifact) {
+          const preview = await client.preview(
+            entry.jobId,
+            lease,
+            previewArtifact,
+          );
+          events.push("preview.ready", {
+            previewId: preview.previewId,
+            path: preview.path,
+            digest: preview.digest,
+          });
         }
         heartbeatAbort.abort();
         await heartbeat;
@@ -132,8 +181,10 @@ export async function runWorker(
         }
         if (!leaseLost) {
           const message = safeError(error, config.model.apiKey);
+          const errorCode =
+            error instanceof DashboardBuildError ? error.code : "AGENT_FAILED";
           events.push("agent.failed", {
-            code: cancellationRequested ? "CANCELLED" : "AGENT_FAILED",
+            code: cancellationRequested ? "CANCELLED" : errorCode,
             message,
           });
           await events.drain();
@@ -143,7 +194,7 @@ export async function runWorker(
             cancellationRequested ? "cancelled" : "failed",
             cancellationRequested
               ? undefined
-              : { code: "AGENT_FAILED", message, retryable: false },
+              : { code: errorCode, message, retryable: false },
           );
           acknowledge = true;
         }
@@ -188,7 +239,18 @@ async function waitForHeartbeat(
 }
 
 function safeError(error: unknown, secret?: string): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const message =
+    error instanceof DashboardBuildError
+      ? [
+          `${error.code}: ${error.message}`,
+          error.path ? `Path: ${error.path}` : "",
+          error.log ? error.log.slice(-6_000) : "",
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : error instanceof Error
+        ? error.message
+        : String(error);
   return (secret ? message.replaceAll(secret, "[redacted]") : message).slice(
     0,
     2_000,

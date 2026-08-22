@@ -1,6 +1,6 @@
 # MDA Implementation TODO
 
-Last updated: 2026-08-21
+Last updated: 2026-08-22
 
 This file tracks implementation status. The detailed contracts and architecture in `docs/` remain the source of truth.
 
@@ -86,11 +86,21 @@ This file tracks implementation status. The detailed contracts and architecture 
 - [x] Add Dashboard save plus Revision list, show, files, read, and deterministic `tar.gz` export CLI flows.
 - [x] Verify cross-Session source continuity and Main/MinIO restart durability against `moss-dev-2`.
 
+### Build validation and Previews
+
+- [x] Add the platform-owned Vite build shell with an Agent-chosen `src/` entry and approved optional dependencies.
+- [x] Add the Preview-only Dashboard Runtime boundary without a component, chart, layout, or source DSL.
+- [x] Run clean, bounded builds in `mda-agent` subprocesses with sanitized environments and no package installation.
+- [x] Add `validate_dashboard` and `build_preview` Moss Tools with durable build and validation events.
+- [x] Add dedicated model-free Preview Jobs for active Checkpoints and immutable Revisions.
+- [x] Persist content-addressed Preview bundles in MinIO and metadata in PostgreSQL.
+- [x] Add expiring signed Preview URLs with path validation, strict CSP, MIME allowlisting, and sandboxing.
+- [x] Add `mda dashboard preview` and verify desktop, 390px, token rejection, and restart durability against `moss-dev-2`.
+
 ## Next
 
 Continue the authoritative authoring and Agent Job path:
 
-- [ ] Add the fixed React/Vite Dashboard Template and build/preview Tools.
 - [ ] Bind immutable Query Revisions to Dashboard Revisions.
 - [ ] Move Pi Session history from the shared Agent volume to S3/MinIO before multi-host deployment.
 - [ ] Add the expired-lease recovery sweep and Redis pending-entry reclaim.
@@ -104,7 +114,7 @@ Continue the authoritative authoring and Agent Job path:
 - [ ] Management Web workspace and React/Vite application.
 - [ ] Data Source Service workspace and runnable service.
 - [x] Separate non-root Main and Agent images with read-only container filesystems and dropped capabilities.
-- [ ] Dashboard Runtime and Dashboard Template packages.
+- [x] Fixed Dashboard Template and Preview-only Runtime package; live query/watch delivery remains pending.
 - [ ] Remaining Dashboard Revision, Agent Event, Data Access, Runtime, and integration-event contracts.
 - [ ] OIDC login flows and tenant/role administration beyond token and membership validation.
 - [ ] Production secret-file loading.
@@ -126,9 +136,9 @@ Continue the authoritative authoring and Agent Job path:
 - [x] Pi SDK integration pinned to the reviewed version.
 - [x] Explicit Pi `ResourceLoader`, Coding Tool allowlist, platform-maintained progressive Dashboard Skill catalog, and read-only Data Source summary prompt section.
 - [x] Restrict Moss's business operations to Dashboard generation; Data Source management stays outside its Tool boundary.
-- [ ] Agent Tools for source discovery, queries, validation, preview, and publishing.
-- [ ] Build, Preview upload, Pi history upload, and retention cleanup; source restore, Checkpoint upload, and fenced settlement now work.
-- [ ] Preview build and isolated iframe rendering.
+- [ ] Agent Tools for source discovery, queries, and publishing; validation and Preview Tools now work.
+- [ ] Pi history upload and retention cleanup; source restore, Checkpoint upload, clean build, Preview upload, and fenced settlement now work.
+- [x] Immutable Preview build and sandboxed browser rendering.
 
 ### Data Access
 
@@ -147,7 +157,7 @@ Continue the authoritative authoring and Agent Job path:
 - [ ] `dashboard.query()` Runtime API.
 - [ ] `dashboard.watch()` polling, cancellation, no-overlap, visibility pause, focus refresh, and bounded retry.
 - [ ] Viewer Host and validated iframe message protocol.
-- [ ] Immutable Preview and Publication artifacts.
+- [ ] Immutable Publication artifacts; immutable Preview artifacts now work.
 - [ ] Clean build, validation, and browser smoke-test pipeline.
 - [ ] Authenticated, public-live, and snapshot Share Links.
 - [ ] Authorization-safe query caching and invalidation, if load requires it.
@@ -155,10 +165,10 @@ Continue the authoritative authoring and Agent Job path:
 ### CLI and Web feature parity
 
 - [ ] CLI contexts and OIDC login beyond `MDA_TOKEN` authentication.
-- [ ] Dashboard generation with build/preview; continuous core chat now works.
+- [x] Dashboard generation with fixed validation and Preview builds through Agent chat or model-free CLI Jobs.
 - [ ] Session resume, fork, inspect, compact, and export.
 - [ ] Job watch, event replay, cancellation, retry, Tool inspection, errors, logs, and statistics.
-- [ ] Dashboard validation, Preview, publication, and complete export; save and source Revision export now work.
+- [ ] Publication and complete export; validation, Preview, save, and source Revision export now work.
 - [ ] Source and Query commands.
 - [ ] Simulation, audit, completion, and full deployment diagnostics.
 - [ ] Management Web screens for the same Control Plane capabilities.
@@ -185,6 +195,7 @@ bun test
 docker compose --env-file .env.local up -d --build --scale agent=3
 mda doctor
 mda chat <dashboard-id>
+mda dashboard preview <dashboard-id> [--revision <revision-id>]
 mda dashboard save <dashboard-id> --message "First Revision"
 mda revision list --dashboard <dashboard-id>
 mda revision files <revision-id>

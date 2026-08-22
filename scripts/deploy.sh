@@ -47,6 +47,7 @@ ensure_local_secrets() {
       printf 'S3_BUCKET=mda-artifacts\n'
       printf 'INTERNAL_AGENT_TOKEN=%s\n' "$(openssl rand -hex 32)"
       printf 'MDA_ACCESS_PASSWORD=%s\n' "$(openssl rand -hex 16)"
+      printf 'MDA_PREVIEW_SIGNING_KEY=%s\n' "$(openssl rand -hex 32)"
       printf 'LLM_BASE_URL=%s\n' "${LLM_BASE_URL:-https://api.deepseek.com/v1}"
       printf 'LLM_MODEL_NAME=%s\n' "${LLM_MODEL_NAME:-deepseek-chat}"
     } >"$LOCAL_ENV"
@@ -63,6 +64,9 @@ ensure_local_secrets() {
   fi
   if ! grep -q '^S3_BUCKET=' "$LOCAL_ENV"; then
     printf 'S3_BUCKET=mda-artifacts\n' >>"$LOCAL_ENV"
+  fi
+  if ! grep -q '^MDA_PREVIEW_SIGNING_KEY=' "$LOCAL_ENV"; then
+    printf 'MDA_PREVIEW_SIGNING_KEY=%s\n' "$(openssl rand -hex 32)" >>"$LOCAL_ENV"
   fi
 
   mkdir -p var/secrets
@@ -90,7 +94,8 @@ bootstrap_remote_secrets() {
   awk -F= '
     $1 == "MINIO_ACCESS_KEY" ||
     $1 == "MINIO_SECRET_KEY" ||
-    $1 == "S3_BUCKET" { print }
+    $1 == "S3_BUCKET" ||
+    $1 == "MDA_PREVIEW_SIGNING_KEY" { print }
   ' "$LOCAL_ENV" | ssh "$SSH_HOST" \
     "while IFS= read -r line; do key=\"\${line%%=*}\"; grep -q \"^\${key}=\" '$REMOTE_DIR/.env' || printf '%s\\n' \"\$line\" >> '$REMOTE_DIR/.env'; done"
   ssh "$SSH_HOST" "chmod 0600 '$REMOTE_DIR/.env'"

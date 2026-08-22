@@ -1,0 +1,24 @@
+{
+  "name": "@mda/dashboard-template",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "exports": {
+    ".": "./src/build.ts"
+  },
+  "dependencies": {
+    "@mda/contracts": "workspace:*",
+    "@mda/dashboard-runtime": "workspace:*",
+    "@sinclair/typebox": "0.34.52",
+    "@vitejs/plugin-react": "6.1.0",
+    "d3": "7.9.0",
+    "echarts": "6.1.0",
+    "lucide-react": "1.33.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "vite": "8.2.2"
+  }
+}

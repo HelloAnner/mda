@@ -66,6 +66,15 @@ export const ClaimedAgentJobSchema = Type.Object(
     prompt: Type.String({ minLength: 1, maxLength: 20_000 }),
     dataSources: AgentDataSourceContextSchema,
     workspace: Type.Optional(AgentWorkspaceRestoreSchema),
+    preview: Type.Optional(
+      Type.Object(
+        {
+          id: Type.String({ minLength: 1 }),
+          sourceDigest: Type.String({ pattern: "^[a-f0-9]{64}$" }),
+        },
+        { additionalProperties: false },
+      ),
+    ),
     lease: Type.Object(
       {
         owner: Type.String({ minLength: 1 }),

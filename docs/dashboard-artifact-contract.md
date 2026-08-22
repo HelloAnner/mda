@@ -73,6 +73,7 @@ First-version example:
   "schemaVersion": 1,
   "title": "Sales Analysis",
   "description": "Shows sales trends and regional performance",
+  "sourceEntry": "src/main.tsx",
   "entry": "dist/index.html",
   "runtimeVersion": "1",
   "queries": [
@@ -98,7 +99,8 @@ First-version example:
 | `schemaVersion` | Yes | Manifest Schema version |
 | `title` | Yes | Dashboard display name |
 | `description` | No | Description of the dashboard's purpose |
-| `entry` | Yes | Entry file produced by the build |
+| `sourceEntry` | Yes | Agent-chosen JavaScript or TypeScript module under `src/` imported by the fixed build shell |
+| `entry` | Yes | Entry file produced by the build; fixed to `dist/index.html` in Runtime version 1 |
 | `runtimeVersion` | Yes | Dashboard Runtime API version |
 | `queries` | Yes | Registered Query IDs the page may call and their parameter types |
 
@@ -154,7 +156,7 @@ The complete refresh, cancellation, freshness, and watcher contract is defined i
 The Agent uses it through a fixed module in source code:
 
 ```ts
-import { dashboard } from "@platform/dashboard-runtime";
+import { dashboard } from "@mda/dashboard-runtime";
 
 const result = await dashboard.query("monthly-sales", {
   startDate: "2026-01-01",
@@ -200,7 +202,7 @@ Filters, linked interactions, and data transformation within the page remain fre
 
 ## 7. Build Contract
 
-The platform specifies only one command and one output:
+The platform-owned `packages/dashboard-template` build shell accepts an Agent-chosen `sourceEntry` under `src/` and specifies only one conceptual command and one output:
 
 ```bash
 bun run build
@@ -345,6 +347,7 @@ Complete the following flow using a sample sales data source:
 ## 14. Related Contracts
 
 - `docs/dashboard-artifacts/revisions.md`: durable Draft Checkpoints, immutable source Revisions, restore, and export.
+- `docs/dashboard-artifacts/previews.md`: fixed clean builds, boundary validation, immutable Preview bundles, and signed delivery.
 - `docs/data-gateway-query-contract.md`: Data Source and Query definitions.
 - `docs/data-source-management-module.md`: Standalone HTTP/JDBC Data Source CRUD and connector ownership.
 - `docs/live-data-and-refresh-contract.md`: Draft checkpoints, live runtime queries, polling, freshness, and sharing modes.

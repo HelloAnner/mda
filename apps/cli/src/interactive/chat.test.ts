@@ -30,6 +30,7 @@ test("resumes durable events after an SSE socket failure", async () => {
     id: "job_1",
     dashboardId: "dashboard_1",
     sessionId: "session_1",
+    purpose: "edit",
     state: "queued",
     attemptCount: 0,
     version: 1,

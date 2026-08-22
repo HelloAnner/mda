@@ -12,10 +12,12 @@ import {
 import type {
   AgentDataSourceContext,
   AgentEventType,
+  DashboardBuildArtifact,
   SourceSnapshot,
 } from "@mda/contracts";
 import type { AgentConfig } from "../config.ts";
 import { restoreWorkspace } from "../workspace.ts";
+import { createDashboardTools, dashboardToolNames } from "./tools.ts";
 
 export type PiModelRuntime = {
   modelRuntime: ModelRuntime;
@@ -146,8 +148,11 @@ ${dataSourceSummary}
 
 Skill 只指导受众、信息、审美、数据语义、状态和注意事项。它们绝不构成组件目录、图表注册表、固定网格、JSON UI Schema 或文件模板。你仍应自由创建最适合任务的组件、布局和交互。
 
+## 构建边界
+看板源码只包含 dashboard.manifest.json、src/** 与 public/**。Manifest 必须声明任意位于 src/ 下的 sourceEntry、固定输出 entry: "dist/index.html"、runtimeVersion: "1" 与 queries。不得创建或修改 package.json、锁文件、Vite 配置、node_modules 或 dist。完成看板源码后必须使用 validate_dashboard 或 build_preview；只有 Tool 成功后才能声称构建、验证或 Preview 成功。
+
 ## 可用工具
-${codingTools.join(", ")}`;
+${[...codingTools, ...dashboardToolNames].join(", ")}`;
   return {
     getExtensions: () => ({
       extensions: [],
@@ -202,7 +207,7 @@ export async function runPiSession(
     signal: AbortSignal;
     onEvent(type: AgentEventType, data: Record<string, unknown>): void;
   },
-): Promise<void> {
+): Promise<{ previewArtifact?: DashboardBuildArtifact }> {
   const paths = resolveSessionPaths(
     config.workspaceRoot,
     input.dashboardId,
@@ -219,13 +224,22 @@ export async function runPiSession(
     compaction: { enabled: true },
     retry: { enabled: true, maxRetries: 2 },
   });
+  let previewArtifact: DashboardBuildArtifact | undefined;
+  const dashboardTools = createDashboardTools({
+    workspace: paths.workspace,
+    onEvent: input.onEvent,
+    onPreviewBuilt: (artifact) => {
+      previewArtifact = artifact;
+    },
+  });
   const { session } = await createAgentSession({
     cwd: paths.workspace,
     agentDir: paths.runtime,
     model: runtime.model,
     modelRuntime: runtime.modelRuntime,
     resourceLoader: resourceLoader(config.skillsRoot, input.dataSources),
-    tools: [...codingTools],
+    tools: [...codingTools, ...dashboardToolNames],
+    customTools: dashboardTools,
     sessionManager: SessionManager.continueRecent(
       paths.workspace,
       paths.history,
@@ -285,4 +299,5 @@ export async function runPiSession(
     unsubscribe();
     session.dispose();
   }
+  return previewArtifact ? { previewArtifact } : {};
 }

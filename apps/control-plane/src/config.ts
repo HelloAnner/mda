@@ -40,6 +40,17 @@ const GlobalConfigFileSchema = Type.Object(
         { additionalProperties: false },
       ),
     ),
+    preview: Type.Optional(
+      Type.Object(
+        {
+          signing_key_env: Type.Optional(EnvironmentNameSchema),
+          ttl_seconds: Type.Optional(
+            Type.Integer({ minimum: 60, maximum: 86_400 }),
+          ),
+        },
+        { additionalProperties: false },
+      ),
+    ),
     auth: Type.Optional(
       Type.Object(
         {
@@ -119,6 +130,8 @@ const ConfigSchema = Type.Object(
     internalAgentToken: Type.String({ minLength: 32 }),
     agentLeaseMs: Type.Integer({ minimum: 5_000, maximum: 300_000 }),
     accessPassword: Type.String({ minLength: 16 }),
+    previewSigningKey: Type.String({ minLength: 32 }),
+    previewTtlSeconds: Type.Integer({ minimum: 60, maximum: 86_400 }),
   },
   { additionalProperties: false },
 );
@@ -142,6 +155,8 @@ export interface Config {
   internalAgentToken: string;
   agentLeaseMs: number;
   accessPassword: string;
+  previewSigningKey: string;
+  previewTtlSeconds: number;
 }
 
 function validationErrors(schema: typeof ConfigSchema, value: unknown): string {
@@ -197,6 +212,8 @@ export function loadConfig(
     file.artifacts?.secret_key_env ?? "S3_SECRET_ACCESS_KEY";
   const internalTokenEnv =
     file.agent?.internal_token_env ?? "INTERNAL_AGENT_TOKEN";
+  const previewSigningKeyEnv =
+    file.preview?.signing_key_env ?? "MDA_PREVIEW_SIGNING_KEY";
   const config = {
     hostname: env.HOST ?? file.server?.host ?? "0.0.0.0",
     port: Number(env.PORT ?? file.server?.port ?? 8080),
@@ -225,6 +242,11 @@ export function loadConfig(
     internalAgentToken: env.INTERNAL_AGENT_TOKEN ?? env[internalTokenEnv] ?? "",
     agentLeaseMs: Number(env.AGENT_LEASE_MS ?? file.agent?.lease_ms ?? 30_000),
     accessPassword: env.MDA_ACCESS_PASSWORD ?? env[accessPasswordEnv] ?? "",
+    previewSigningKey:
+      env.MDA_PREVIEW_SIGNING_KEY ?? env[previewSigningKeyEnv] ?? "",
+    previewTtlSeconds: Number(
+      env.MDA_PREVIEW_TTL_SECONDS ?? file.preview?.ttl_seconds ?? 3_600,
+    ),
   };
 
   if (!Value.Check(ConfigSchema, config)) {

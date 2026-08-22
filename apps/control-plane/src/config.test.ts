@@ -18,6 +18,7 @@ const valid = {
   OIDC_JWKS_URL: "https://identity.example/.well-known/jwks.json",
   INTERNAL_AGENT_TOKEN: "test-internal-agent-token-32-bytes",
   MDA_ACCESS_PASSWORD: "test-global-password",
+  MDA_PREVIEW_SIGNING_KEY: "test-preview-signing-key-at-least-32-bytes",
   MDA_AUTH_MODE: "oidc",
 };
 
@@ -41,6 +42,8 @@ test("loads and converts startup configuration", () => {
     internalAgentToken: valid.INTERNAL_AGENT_TOKEN,
     agentLeaseMs: 30_000,
     accessPassword: valid.MDA_ACCESS_PASSWORD,
+    previewSigningKey: valid.MDA_PREVIEW_SIGNING_KEY,
+    previewTtlSeconds: 3_600,
   });
 });
 
@@ -62,6 +65,9 @@ bucket = "mda-artifacts"
 region = "us-east-1"
 access_key_env = "TEST_S3_ACCESS_KEY"
 secret_key_env = "TEST_S3_SECRET_KEY"
+[preview]
+signing_key_env = "TEST_PREVIEW_SIGNING_KEY"
+ttl_seconds = 1800
 [oidc]
 issuer = "https://identity.example"
 audience = "mda"
@@ -87,11 +93,13 @@ api_key_env = "TEST_MODEL_API_KEY"
         TEST_ACCESS_PASSWORD: valid.MDA_ACCESS_PASSWORD,
         TEST_S3_ACCESS_KEY: valid.S3_ACCESS_KEY_ID,
         TEST_S3_SECRET_KEY: valid.S3_SECRET_ACCESS_KEY,
+        TEST_PREVIEW_SIGNING_KEY: valid.MDA_PREVIEW_SIGNING_KEY,
       }),
     ).toMatchObject({
       port: 9091,
       agentLeaseMs: 45_000,
       accessPassword: valid.MDA_ACCESS_PASSWORD,
+      previewTtlSeconds: 1_800,
     });
   } finally {
     rmSync(directory, { recursive: true });

@@ -63,7 +63,7 @@ export async function watchJob(
   initialJob: AgentJob,
   fetchEvents: typeof apiFetch = apiFetch,
   readJob: typeof apiRequest = apiRequest,
-): Promise<void> {
+): Promise<AgentJob> {
   let cursor = 0;
   let printedAssistant = false;
   while (true) {
@@ -107,6 +107,18 @@ export async function watchJob(
             process.stderr.write(
               `  ${String(event.data.toolName ?? "tool")} ${event.data.isError ? "failed" : "done"}\n`,
             );
+          } else if (event.type === "build.started") {
+            process.stderr.write("\n  build …\n");
+          } else if (event.type === "validation.completed") {
+            process.stderr.write(
+              `  validation ${event.data.status === "passed" ? "passed" : "failed"}\n`,
+            );
+          } else if (event.type === "build.completed") {
+            process.stderr.write(
+              `  build ${event.data.status === "succeeded" ? "done" : "failed"}\n`,
+            );
+          } else if (event.type === "preview.ready") {
+            process.stderr.write("  preview ready\n");
           } else if (event.type === "agent.failed") {
             process.stderr.write(
               `\nAgent failed: ${String(event.data.message ?? "Unknown error")}\n`,
@@ -139,7 +151,7 @@ export async function watchJob(
           `${job.terminalError.code}: ${job.terminalError.message}\n`,
         );
       }
-      return;
+      return job;
     }
     await Bun.sleep(250);
   }

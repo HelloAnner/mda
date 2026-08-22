@@ -4,8 +4,10 @@ import { existsSync } from "node:fs";
 import { rename, rm } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import {
+  CreateDashboardPreviewResponseSchema,
   type Dashboard,
   DashboardListResponseSchema,
+  DashboardPreviewSchema,
   type DashboardRevision,
   DashboardRevisionFileListResponseSchema,
   DashboardRevisionListResponseSchema,
@@ -17,7 +19,7 @@ import {
 import { Value } from "@sinclair/typebox/value";
 import packageJson from "../package.json" with { type: "json" };
 import { ApiClientError, apiFetch, apiRequest } from "./client/api.ts";
-import { chat } from "./interactive/chat.ts";
+import { chat, watchJob } from "./interactive/chat.ts";
 
 const help = `mda ${packageJson.version}
 
@@ -30,6 +32,7 @@ Commands:
   dashboard list [--limit <n>]
   dashboard create --name <name> [--description <text>] [--idempotency-key <key>]
   dashboard show <dashboard-id>
+  dashboard preview <dashboard-id> [--revision <revision-id>]
   dashboard save <dashboard-id> [--message <text>]
   revision list --dashboard <dashboard-id> [--limit <n>]
   revision show <revision-id>
@@ -97,6 +100,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
         message: { type: "string" },
         name: { type: "string" },
         output: { type: "string" },
+        revision: { type: "string" },
         tenant: { type: "string" },
         version: { type: "boolean", short: "V" },
       },
@@ -324,6 +328,46 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
       }
       if (output === "json") console.log(JSON.stringify(body));
       else printDashboard(body);
+      return 0;
+    }
+
+    if (action === "preview" && parsed.positionals.length === 3) {
+      const dashboardId = parsed.positionals[2] ?? "";
+      const created = await apiRequest(
+        config,
+        `/api/dashboards/${encodeURIComponent(dashboardId)}/previews`,
+        {
+          method: "POST",
+          headers: {
+            "idempotency-key":
+              stringValue(parsed.values["idempotency-key"]) ??
+              crypto.randomUUID(),
+          },
+          body: JSON.stringify({
+            ...(stringValue(parsed.values.revision)
+              ? { revisionId: stringValue(parsed.values.revision) }
+              : {}),
+          }),
+        },
+      );
+      if (!Value.Check(CreateDashboardPreviewResponseSchema, created)) {
+        throw new Error("Control Plane returned invalid Preview data");
+      }
+      const job = await watchJob(config, created.job);
+      if (job.state !== "succeeded") return 5;
+      const preview = await apiRequest(
+        config,
+        `/api/previews/${encodeURIComponent(created.preview.id)}`,
+      );
+      if (!Value.Check(DashboardPreviewSchema, preview)) {
+        throw new Error("Control Plane returned invalid Preview data");
+      }
+      if (preview.status !== "ready") {
+        console.error(`Preview is ${preview.status}`);
+        return 5;
+      }
+      if (output === "json") console.log(JSON.stringify(preview));
+      else console.log(preview.url);
       return 0;
     }
 
