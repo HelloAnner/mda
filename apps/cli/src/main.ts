@@ -47,6 +47,8 @@ Commands:
   dashboard list [--limit <n>]
   dashboard create --name <name> [--description <text>] [--idempotency-key <key>]
   dashboard show <dashboard-id>
+  dashboard update <dashboard-id> [--name <name>] [--description <text>] --expected-version <n>
+  dashboard archive <dashboard-id> --expected-version <n>
   dashboard preview <dashboard-id> [--revision <revision-id>]
   dashboard save <dashboard-id> [--message <text>]
   dashboard publish <dashboard-id> --revision <revision-id>
@@ -866,6 +868,42 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
             : {}),
         }),
       });
+      if (!Value.Check(DashboardSchema, body)) {
+        throw new Error("Control Plane returned invalid Dashboard data");
+      }
+      if (output === "json") console.log(JSON.stringify(body));
+      else printDashboard(body);
+      return 0;
+    }
+
+    if (
+      (action === "update" || action === "archive") &&
+      parsed.positionals.length === 3
+    ) {
+      const expectedVersion = Number(
+        stringValue(parsed.values["expected-version"]),
+      );
+      if (!Number.isInteger(expectedVersion) || expectedVersion < 1) {
+        console.error(`dashboard ${action} requires --expected-version`);
+        return 2;
+      }
+      const body = await apiRequest(
+        config,
+        `/api/dashboards/${encodeURIComponent(parsed.positionals[2] ?? "")}${action === "archive" ? "/archive" : ""}`,
+        {
+          method: action === "archive" ? "POST" : "PATCH",
+          body: JSON.stringify({
+            expectedVersion,
+            ...(action === "update" && stringValue(parsed.values.name)
+              ? { name: stringValue(parsed.values.name) }
+              : {}),
+            ...(action === "update" &&
+            stringValue(parsed.values.description) !== undefined
+              ? { description: stringValue(parsed.values.description) }
+              : {}),
+          }),
+        },
+      );
       if (!Value.Check(DashboardSchema, body)) {
         throw new Error("Control Plane returned invalid Dashboard data");
       }

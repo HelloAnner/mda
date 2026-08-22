@@ -6,13 +6,21 @@ export interface NewDashboard extends Dashboard {
   normalizedName: string;
 }
 
+export function normalizeDashboardName(value: string): {
+  name: string;
+  normalizedName: string;
+} {
+  const name = value.trim().replace(/\s+/gu, " ");
+  return { name, normalizedName: name.normalize("NFKC").toLowerCase() };
+}
+
 export function createDashboard(
   input: CreateDashboardRequest,
   tenantId: string,
   createdBy: string,
   now = new Date(),
 ): NewDashboard {
-  const name = input.name.trim().replace(/\s+/gu, " ");
+  const { name, normalizedName } = normalizeDashboardName(input.name);
   const description = input.description?.trim() || undefined;
   const timestamp = now.toISOString();
 
@@ -21,7 +29,7 @@ export function createDashboard(
     tenantId,
     createdBy,
     name,
-    normalizedName: name.normalize("NFKC").toLowerCase(),
+    normalizedName,
     ...(description ? { description } : {}),
     status: "active",
     version: 1,

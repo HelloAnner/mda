@@ -143,7 +143,7 @@ Continue the backend distribution and data path:
 - [ ] Management Web workspace and React/Vite application.
 - [x] Data Source Service workspace and runnable service.
 - [x] Separate non-root Main and Agent images with read-only container filesystems and dropped capabilities.
-- [x] Fixed Dashboard Template and Preview-only Runtime package; live query/watch delivery remains pending.
+- [x] Fixed Dashboard Template and live public query/watch Runtime package.
 - [ ] Remaining Dashboard Revision, Agent Event, Data Access, Runtime, and integration-event contracts.
 - [ ] OIDC login flows and tenant/role administration beyond token and membership validation.
 - [ ] Production secret-file loading.
@@ -155,7 +155,7 @@ Continue the backend distribution and data path:
 
 ### Dashboard authoring and Agent work
 
-- [ ] Dashboard metadata CRUD and archive behavior.
+- [x] Dashboard metadata create, list, show, optimistic update, and archive behavior.
 - [x] Draft Checkpoints and immutable Dashboard Revisions.
 - [x] Immutable Query Bindings owned by Publications; promote binding validation earlier into Dashboard Revision save when Query editing is added.
 - [ ] S3-backed Pi Session history; source workspaces now restore from MinIO Checkpoints.

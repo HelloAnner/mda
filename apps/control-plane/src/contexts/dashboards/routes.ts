@@ -1,6 +1,8 @@
 import {
+  ArchiveDashboardRequestSchema,
   CreateDashboardRequestSchema,
   type DashboardListResponse,
+  UpdateDashboardRequestSchema,
 } from "@mda/contracts";
 import type { SQL } from "bun";
 import { type PrincipalContext, requirePermission } from "../../shared/auth.ts";
@@ -10,7 +12,12 @@ import {
   readJson,
   requireIdempotencyKey,
 } from "../../shared/http.ts";
-import { getDashboard, insertDashboard, listDashboards } from "./postgres.ts";
+import {
+  getDashboard,
+  insertDashboard,
+  listDashboards,
+  updateDashboard,
+} from "./postgres.ts";
 
 interface DashboardRouteDependencies {
   db: SQL;
@@ -67,8 +74,11 @@ export async function handleDashboardRequest(
       return Response.json(response);
     }
 
-    const encodedId = url.pathname.slice("/api/dashboards/".length);
-    if (encodedId && !encodedId.includes("/") && request.method === "GET") {
+    const itemMatch = url.pathname.match(
+      /^\/api\/dashboards\/([^/]+)(?:\/(archive))?$/,
+    );
+    const encodedId = itemMatch?.[1] ?? "";
+    if (encodedId && request.method === "GET" && !itemMatch?.[2]) {
       requirePermission(principal, "dashboard.read");
       let id: string;
       try {
@@ -85,6 +95,37 @@ export async function handleDashboardRequest(
         throw new HttpError(404, "DASHBOARD_NOT_FOUND", "Dashboard not found");
       }
       return Response.json(dashboard);
+    }
+    if (encodedId && request.method === "PATCH" && !itemMatch?.[2]) {
+      requirePermission(principal, "dashboard.edit");
+      return Response.json(
+        await updateDashboard(
+          dependencies.db,
+          principal.tenantId,
+          principal.userId,
+          requestId,
+          decodeURIComponent(encodedId),
+          await readJson(request, UpdateDashboardRequestSchema),
+        ),
+      );
+    }
+    if (
+      encodedId &&
+      request.method === "POST" &&
+      itemMatch?.[2] === "archive"
+    ) {
+      requirePermission(principal, "dashboard.edit");
+      return Response.json(
+        await updateDashboard(
+          dependencies.db,
+          principal.tenantId,
+          principal.userId,
+          requestId,
+          decodeURIComponent(encodedId),
+          await readJson(request, ArchiveDashboardRequestSchema),
+          true,
+        ),
+      );
     }
 
     throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method not allowed");

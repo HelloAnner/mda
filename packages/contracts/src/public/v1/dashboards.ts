@@ -21,13 +21,37 @@ export const CreateDashboardRequestSchema = Type.Object(
   { $id: "CreateDashboardRequestV1", additionalProperties: false },
 );
 
+export const UpdateDashboardRequestSchema = Type.Object(
+  {
+    name: Type.Optional(
+      Type.String({ minLength: 1, maxLength: 100, pattern: "\\S" }),
+    ),
+    description: Type.Optional(
+      Type.Union([Type.String({ maxLength: 1000 }), Type.Null()]),
+    ),
+    expectedVersion: Type.Integer({ minimum: 1 }),
+  },
+  { $id: "UpdateDashboardRequestV1", additionalProperties: false },
+);
+
+export const ArchiveDashboardRequestSchema = Type.Object(
+  { expectedVersion: Type.Integer({ minimum: 1 }) },
+  { additionalProperties: false },
+);
+
 export const DashboardListResponseSchema = Type.Object(
   { items: Type.Array(DashboardSchema, { maxItems: 100 }) },
   { $id: "DashboardListResponseV1", additionalProperties: false },
 );
 
+export type ArchiveDashboardRequest = Static<
+  typeof ArchiveDashboardRequestSchema
+>;
 export type CreateDashboardRequest = Static<
   typeof CreateDashboardRequestSchema
 >;
 export type Dashboard = Static<typeof DashboardSchema>;
 export type DashboardListResponse = Static<typeof DashboardListResponseSchema>;
+export type UpdateDashboardRequest = Static<
+  typeof UpdateDashboardRequestSchema
+>;

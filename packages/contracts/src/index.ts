@@ -62,12 +62,16 @@ export {
   CreateAgentJobRequestSchema,
 } from "./public/v1/agent-work.ts";
 export {
+  type ArchiveDashboardRequest,
+  ArchiveDashboardRequestSchema,
   type CreateDashboardRequest,
   CreateDashboardRequestSchema,
   type Dashboard,
   type DashboardListResponse,
   DashboardListResponseSchema,
   DashboardSchema,
+  type UpdateDashboardRequest,
+  UpdateDashboardRequestSchema,
 } from "./public/v1/dashboards.ts";
 export {
   type CreateDataSourceRequest,

@@ -1,8 +1,13 @@
-import type { CreateDashboardRequest, Dashboard } from "@mda/contracts";
+import type {
+  ArchiveDashboardRequest,
+  CreateDashboardRequest,
+  Dashboard,
+  UpdateDashboardRequest,
+} from "@mda/contracts";
 import type { SQL } from "bun";
 import { HttpError } from "../../shared/http.ts";
 import { claimIdempotency, requestDigest } from "../../shared/idempotency.ts";
-import { createDashboard } from "./domain.ts";
+import { createDashboard, normalizeDashboardName } from "./domain.ts";
 
 const operation = "dashboard.create";
 
@@ -114,6 +119,95 @@ export async function insertDashboard(
       ((error as { code?: string }).code === "23505" ||
         (error as { errno?: string }).errno === "23505")
     ) {
+      throw new HttpError(
+        409,
+        "DASHBOARD_NAME_CONFLICT",
+        "A Dashboard with this name already exists",
+      );
+    }
+    throw error;
+  }
+}
+
+export async function updateDashboard(
+  db: SQL,
+  tenantId: string,
+  userId: string,
+  requestId: string,
+  id: string,
+  input: UpdateDashboardRequest | ArchiveDashboardRequest,
+  archive = false,
+): Promise<Dashboard> {
+  try {
+    return await db.begin(async (transaction) => {
+      const current = await transaction`
+        SELECT id, name, normalized_name, description, status, version,
+          created_at, updated_at
+        FROM dashboards
+        WHERE tenant_id = ${tenantId} AND id = ${id}
+        FOR UPDATE
+      `;
+      const row = current[0] as Row | undefined;
+      if (!row) {
+        throw new HttpError(404, "DASHBOARD_NOT_FOUND", "Dashboard not found");
+      }
+      if (Number(row.version) !== input.expectedVersion) {
+        throw new HttpError(409, "VERSION_CONFLICT", "Dashboard changed");
+      }
+      if (row.status === "archived") {
+        if (archive) return toDashboard(row);
+        throw new HttpError(409, "DASHBOARD_ARCHIVED", "Dashboard is archived");
+      }
+      const update = archive ? undefined : (input as UpdateDashboardRequest);
+      const name = update?.name
+        ? normalizeDashboardName(update.name)
+        : {
+            name: String(row.name),
+            normalizedName: String(row.normalized_name),
+          };
+      const description =
+        update?.description === undefined
+          ? row.description
+          : update.description?.trim() || null;
+      const now = new Date().toISOString();
+      const updated = await transaction`
+        UPDATE dashboards
+        SET name = ${name.name}, normalized_name = ${name.normalizedName},
+          description = ${description ?? null},
+          status = ${archive ? "archived" : "active"},
+          version = version + 1, updated_at = ${now}
+        WHERE tenant_id = ${tenantId} AND id = ${id}
+          AND version = ${input.expectedVersion}
+        RETURNING id, name, description, status, version, created_at, updated_at
+      `;
+      const dashboard = toDashboard(updated[0] as Row);
+      const action = archive
+        ? "dashboard.archived"
+        : "dashboard.metadata-updated";
+      const data = archive
+        ? {}
+        : { name: dashboard.name, description: dashboard.description ?? null };
+      await transaction`
+        INSERT INTO control_outbox (
+          id, tenant_id, event_type, aggregate_id, payload, occurred_at
+        ) VALUES (
+          ${`event_${crypto.randomUUID()}`}, ${tenantId}, ${action}, ${id},
+          ${JSON.stringify({ type: action, dashboardId: id, version: dashboard.version, data })}::jsonb,
+          ${now}
+        )
+      `;
+      await transaction`
+        INSERT INTO audit_events (
+          id, tenant_id, actor_id, action, aggregate_id, request_id, data, occurred_at
+        ) VALUES (
+          ${`audit_${crypto.randomUUID()}`}, ${tenantId}, ${userId}, ${action},
+          ${id}, ${requestId}, ${JSON.stringify(data)}::jsonb, ${now}
+        )
+      `;
+      return dashboard;
+    });
+  } catch (error) {
+    if ((error as { errno?: string }).errno === "23505") {
       throw new HttpError(
         409,
         "DASHBOARD_NAME_CONFLICT",
