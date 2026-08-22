@@ -1,11 +1,13 @@
 import {
   AgentLeaseCommandSchema,
   AppendAgentEventsRequestSchema,
+  CheckpointAgentWorkspaceRequestSchema,
   ClaimAgentJobRequestSchema,
   CreateAgentJobRequestSchema,
   SettleAgentJobRequestSchema,
 } from "@mda/contracts";
 import type { SQL } from "bun";
+import type { ArtifactStore } from "../../shared/artifacts.ts";
 import {
   authorizeInternalRequest,
   type PrincipalContext,
@@ -17,6 +19,10 @@ import {
   readJson,
   requireIdempotencyKey,
 } from "../../shared/http.ts";
+import {
+  checkpointAgentWorkspace,
+  loadAgentWorkspace,
+} from "../revisions/service.ts";
 import {
   appendAgentEvents,
   cancelAgentJob,
@@ -34,6 +40,21 @@ interface AgentWorkRouteDependencies {
   authenticate(request: Request): Promise<PrincipalContext>;
   internalAgentToken?: string;
   agentLeaseMs?: number;
+  artifacts?: ArtifactStore;
+}
+
+function requireArtifacts(
+  dependencies: AgentWorkRouteDependencies,
+): ArtifactStore {
+  if (!dependencies.artifacts) {
+    throw new HttpError(
+      503,
+      "SERVICE_UNAVAILABLE",
+      "Dashboard artifact storage is not configured",
+      true,
+    );
+  }
+  return dependencies.artifacts;
 }
 
 function decodeId(value: string): string {
@@ -116,7 +137,7 @@ export async function handleAgentWorkRequest(
     /^\/api\/agent-jobs\/([^/]+)(?:\/(cancel|events))?$/,
   );
   const internalMatch = url.pathname.match(
-    /^\/internal\/v1\/agent-jobs\/([^/]+)\/(claim|start|heartbeat|events|settle)$/,
+    /^\/internal\/v1\/agent-jobs\/([^/]+)\/(claim|start|heartbeat|events|checkpoint|settle)$/,
   );
   if (!messageMatch && !publicJobMatch && !internalMatch) return undefined;
 
@@ -197,9 +218,18 @@ export async function handleAgentWorkRequest(
     const leaseMs = dependencies.agentLeaseMs ?? 30_000;
     if (action === "claim") {
       const command = await readJson(request, ClaimAgentJobRequestSchema);
-      return Response.json(
-        await claimAgentJob(dependencies.db, jobId, command.owner, leaseMs),
+      const claimed = await claimAgentJob(
+        dependencies.db,
+        jobId,
+        command.owner,
+        leaseMs,
       );
+      const workspace = await loadAgentWorkspace(
+        dependencies.db,
+        requireArtifacts(dependencies),
+        jobId,
+      );
+      return Response.json({ ...claimed, ...(workspace ? { workspace } : {}) });
     }
     if (action === "start") {
       return Response.json(
@@ -226,6 +256,16 @@ export async function handleAgentWorkRequest(
           dependencies.db,
           jobId,
           await readJson(request, AppendAgentEventsRequestSchema),
+        ),
+      );
+    }
+    if (action === "checkpoint") {
+      return Response.json(
+        await checkpointAgentWorkspace(
+          dependencies.db,
+          requireArtifacts(dependencies),
+          jobId,
+          await readJson(request, CheckpointAgentWorkspaceRequestSchema),
         ),
       );
     }

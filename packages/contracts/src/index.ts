@@ -20,6 +20,18 @@ export {
   SettleAgentJobRequestSchema,
 } from "./internal/agent/v1/jobs.ts";
 export {
+  type AgentWorkspaceRestore,
+  AgentWorkspaceRestoreSchema,
+  type CheckpointAgentWorkspaceRequest,
+  CheckpointAgentWorkspaceRequestSchema,
+  type CheckpointAgentWorkspaceResponse,
+  CheckpointAgentWorkspaceResponseSchema,
+  type SourceSnapshot,
+  type SourceSnapshotFile,
+  SourceSnapshotFileSchema,
+  SourceSnapshotSchema,
+} from "./internal/agent/v1/workspace.ts";
+export {
   type AgentEvent,
   AgentEventSchema,
   type AgentEventType,
@@ -43,6 +55,18 @@ export {
   DashboardListResponseSchema,
   DashboardSchema,
 } from "./public/v1/dashboards.ts";
+export {
+  type CreateDashboardRevisionRequest,
+  CreateDashboardRevisionRequestSchema,
+  type DashboardRevision,
+  type DashboardRevisionFile,
+  type DashboardRevisionFileListResponse,
+  DashboardRevisionFileListResponseSchema,
+  DashboardRevisionFileSchema,
+  type DashboardRevisionListResponse,
+  DashboardRevisionListResponseSchema,
+  DashboardRevisionSchema,
+} from "./public/v1/revisions.ts";
 export {
   CONTRACT_VERSION,
   type HealthResponse,

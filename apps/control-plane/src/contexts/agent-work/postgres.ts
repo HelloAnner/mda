@@ -398,11 +398,72 @@ export async function settleAgentJob(
     return await db.begin(async (transaction) => {
       const row = await lockedJob(transaction, id);
       const previous = toAggregate(row);
-      const updated = await updateJob(
-        transaction,
-        previous,
-        settleJob(previous, command, now),
-      );
+      const next = settleJob(previous, command, now);
+      if (command.state === "succeeded") {
+        const checkpointRows = await transaction`
+          SELECT id, tenant_id, dashboard_id, parent_checkpoint_id,
+            content_digest
+          FROM draft_checkpoints
+          WHERE job_id = ${id} AND status = 'staged'
+          LIMIT 1
+        `;
+        const checkpoint = checkpointRows[0] as Row | undefined;
+        if (checkpoint) {
+          await transaction`
+            SELECT id FROM dashboards
+            WHERE tenant_id = ${String(checkpoint.tenant_id)}
+              AND id = ${String(checkpoint.dashboard_id)}
+            FOR UPDATE
+          `;
+          const latestRows = await transaction`
+            SELECT id FROM draft_checkpoints
+            WHERE tenant_id = ${String(checkpoint.tenant_id)}
+              AND dashboard_id = ${String(checkpoint.dashboard_id)}
+              AND status = 'active'
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+          `;
+          const latestId = latestRows[0]
+            ? String((latestRows[0] as Row).id)
+            : undefined;
+          const parentId = checkpoint.parent_checkpoint_id
+            ? String(checkpoint.parent_checkpoint_id)
+            : undefined;
+          if (latestId !== parentId) {
+            throw new HttpError(
+              409,
+              "DRAFT_CONFLICT",
+              "Dashboard Draft changed in another Session",
+            );
+          }
+          await transaction`
+            UPDATE draft_checkpoints
+            SET status = 'active'
+            WHERE id = ${String(checkpoint.id)} AND status = 'staged'
+          `;
+          const sequenceRows = await transaction`
+            SELECT COALESCE(max(sequence), 0)::int + 1 AS sequence
+            FROM agent_events
+            WHERE job_id = ${id}
+          `;
+          await transaction`
+            INSERT INTO agent_events (
+              id, tenant_id, job_id, sequence, type, data, created_at
+            ) VALUES (
+              ${`agent-event_${crypto.randomUUID()}`},
+              ${String(checkpoint.tenant_id)}, ${id},
+              ${Number((sequenceRows[0] as Row).sequence)},
+              'draft.checkpoint.saved',
+              ${JSON.stringify({
+                checkpointId: String(checkpoint.id),
+                digest: String(checkpoint.content_digest),
+              })}::jsonb,
+              ${now.toISOString()}
+            )
+          `;
+        }
+      }
+      const updated = await updateJob(transaction, previous, next);
       return toAgentJob(updated);
     });
   } catch (error) {

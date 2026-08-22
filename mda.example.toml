@@ -10,6 +10,13 @@ url_env = "DATABASE_URL"
 [redis]
 url_env = "REDIS_URL"
 
+[artifacts]
+endpoint = "http://localhost:9000"
+bucket = "mda-artifacts"
+region = "us-east-1"
+access_key_env = "S3_ACCESS_KEY_ID"
+secret_key_env = "S3_SECRET_ACCESS_KEY"
+
 [auth]
 mode = "password"
 tenant_id = "local"

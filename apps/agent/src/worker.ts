@@ -5,12 +5,17 @@ import {
 } from "./clients/control-plane.ts";
 import { type AgentConfig, loadAgentConfig } from "./config.ts";
 import { AgentEventForwarder } from "./events.ts";
-import { createPiModelRuntime, runPiSession } from "./pi/session.ts";
+import {
+  createPiModelRuntime,
+  resolveSessionPaths,
+  runPiSession,
+} from "./pi/session.ts";
 import {
   acknowledgeAgentJob,
   ensureAgentGroup,
   readAgentJob,
 } from "./queue.ts";
+import { captureWorkspace } from "./workspace.ts";
 
 type PiModelRuntime = Awaited<ReturnType<typeof createPiModelRuntime>>;
 
@@ -76,15 +81,36 @@ export async function runWorker(
           sessionId: claimed.job.sessionId,
           prompt: claimed.prompt,
           dataSources: claimed.dataSources,
+          ...(claimed.workspace
+            ? { workspaceSnapshot: claimed.workspace.snapshot }
+            : {}),
           signal: runAbort.signal,
           onEvent: (type, data) => events.push(type, data),
         });
-        heartbeatAbort.abort();
-        await heartbeat;
         if (leaseLost) throw new Error("Agent lease lost");
 
         const current = await client.heartbeat(entry.jobId, lease);
         cancellationRequested ||= Boolean(current.cancellationRequestedAt);
+        if (!cancellationRequested) {
+          const workspace = resolveSessionPaths(
+            config.workspaceRoot,
+            claimed.job.dashboardId,
+            claimed.job.sessionId,
+          ).workspace;
+          const snapshot = await captureWorkspace(workspace);
+          if (snapshot.fileCount > 0) {
+            await client.checkpoint(entry.jobId, {
+              ...lease,
+              ...(claimed.workspace
+                ? { baseCheckpointId: claimed.workspace.checkpointId }
+                : {}),
+              snapshot,
+            });
+          }
+        }
+        heartbeatAbort.abort();
+        await heartbeat;
+        if (leaseLost) throw new Error("Agent lease lost");
         events.push("agent.completed", {
           state: cancellationRequested ? "cancelled" : "succeeded",
         });

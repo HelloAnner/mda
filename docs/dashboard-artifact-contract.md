@@ -344,6 +344,7 @@ Complete the following flow using a sample sales data source:
 
 ## 14. Related Contracts
 
+- `docs/dashboard-artifacts/revisions.md`: durable Draft Checkpoints, immutable source Revisions, restore, and export.
 - `docs/data-gateway-query-contract.md`: Data Source and Query definitions.
 - `docs/data-source-management-module.md`: Standalone HTTP/JDBC Data Source CRUD and connector ownership.
 - `docs/live-data-and-refresh-contract.md`: Draft checkpoints, live runtime queries, polling, freshness, and sharing modes.

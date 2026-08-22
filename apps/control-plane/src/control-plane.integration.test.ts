@@ -2,8 +2,10 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import type { Server } from "bun";
 import { SQL } from "bun";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
+import { snapshotDigest } from "./contexts/revisions/snapshot.ts";
 import { migrate } from "./migrate.ts";
 import { startServer } from "./server.ts";
+import { MemoryArtifactStore } from "./shared/artifacts.ts";
 import { createAuthenticator } from "./shared/auth.ts";
 
 const databaseUrl = Bun.env.TEST_DATABASE_URL;
@@ -12,12 +14,32 @@ let db: SQL;
 let server: Server<unknown>;
 let baseUrl: string;
 let token: string;
+const artifacts = new MemoryArtifactStore();
 
 function authorizedHeaders(extra: Record<string, string> = {}): HeadersInit {
   return {
     authorization: `Bearer ${token}`,
     "x-mda-tenant": "tenant_1",
     ...extra,
+  };
+}
+
+function sourceSnapshot() {
+  const bytes = new TextEncoder().encode("export const dashboard = true;\n");
+  const files = [{ path: "src/app.ts", bytes, executable: false }];
+  const computed = snapshotDigest(files);
+  return {
+    schemaVersion: 1 as const,
+    digest: computed.digest,
+    fileCount: files.length,
+    totalBytes: computed.totalBytes,
+    files: [
+      {
+        path: "src/app.ts",
+        content: Buffer.from(bytes).toString("base64"),
+        executable: false,
+      },
+    ],
   };
 }
 
@@ -72,6 +94,7 @@ beforeAll(async () => {
     ),
     internalAgentToken: "test-internal-agent-token-32-bytes",
     agentLeaseMs: 30_000,
+    artifacts,
   });
   baseUrl = `http://127.0.0.1:${server.port}`;
 });
@@ -155,6 +178,24 @@ integrationTest("enqueues and fences authoritative Agent work", async () => {
     },
   );
   expect((await appended.json())[0].sequence).toBe(1);
+  const snapshot = sourceSnapshot();
+  const checkpoint = await fetch(
+    `${baseUrl}/internal/v1/agent-jobs/${queued.id}/checkpoint`,
+    {
+      method: "POST",
+      headers: internalHeaders,
+      body: JSON.stringify({
+        owner: "agent_1",
+        fencingToken: 1,
+        snapshot,
+      }),
+    },
+  );
+  expect(checkpoint.status).toBe(200);
+  expect(await checkpoint.json()).toMatchObject({
+    created: true,
+    digest: snapshot.digest,
+  });
   const settled = await fetch(
     `${baseUrl}/internal/v1/agent-jobs/${queued.id}/settle`,
     {
@@ -168,6 +209,102 @@ integrationTest("enqueues and fences authoritative Agent work", async () => {
     },
   );
   expect((await settled.json()).state).toBe("succeeded");
+
+  const save = await fetch(
+    `${baseUrl}/api/dashboards/dashboard_agent/revisions`,
+    {
+      method: "POST",
+      headers: authorizedHeaders({
+        "content-type": "application/json",
+        "idempotency-key": "save-agent-source-1",
+      }),
+      body: JSON.stringify({ message: "First source Revision" }),
+    },
+  );
+  expect(save.status).toBe(201);
+  const revision = await save.json();
+  expect(revision).toMatchObject({
+    dashboardId: "dashboard_agent",
+    number: 1,
+    digest: snapshot.digest,
+    fileCount: 1,
+    message: "First source Revision",
+  });
+  expect(revision.artifactKey).toBeUndefined();
+
+  const files = await fetch(`${baseUrl}/api/revisions/${revision.id}/files`, {
+    headers: authorizedHeaders(),
+  });
+  expect(await files.json()).toEqual({
+    items: [
+      {
+        path: "src/app.ts",
+        size: 31,
+        digest: expect.any(String),
+        executable: false,
+      },
+    ],
+  });
+  const source = await fetch(
+    `${baseUrl}/api/revisions/${revision.id}/files/${encodeURIComponent("src/app.ts")}`,
+    { headers: authorizedHeaders() },
+  );
+  expect(await source.text()).toBe("export const dashboard = true;\n");
+  const exported = await fetch(
+    `${baseUrl}/api/revisions/${revision.id}/export`,
+    { headers: authorizedHeaders() },
+  );
+  expect(exported.headers.get("content-type")).toBe("application/gzip");
+  expect(
+    Buffer.from(
+      Bun.gunzipSync(new Uint8Array(await exported.arrayBuffer())).subarray(
+        512,
+        543,
+      ),
+    ).toString(),
+  ).toBe("export const dashboard = true;\n");
+
+  const restoreJobResponse = await fetch(
+    `${baseUrl}/api/dashboards/dashboard_agent/messages`,
+    {
+      method: "POST",
+      headers: authorizedHeaders({
+        "content-type": "application/json",
+        "idempotency-key": "agent-edit-restore-1",
+      }),
+      body: JSON.stringify({ message: "Continue the Dashboard" }),
+    },
+  );
+  const restoreJob = await restoreJobResponse.json();
+  const restoreClaim = await fetch(
+    `${baseUrl}/internal/v1/agent-jobs/${restoreJob.id}/claim`,
+    {
+      method: "POST",
+      headers: internalHeaders,
+      body: JSON.stringify({ owner: "agent_2" }),
+    },
+  );
+  const restored = await restoreClaim.json();
+  expect(restored.workspace.snapshot).toEqual(snapshot);
+  expect(restored.workspace.checkpointId).toStartWith("checkpoint_");
+  const restoreLease = JSON.stringify({
+    owner: "agent_2",
+    fencingToken: restored.lease.fencingToken,
+  });
+  await fetch(`${baseUrl}/internal/v1/agent-jobs/${restoreJob.id}/start`, {
+    method: "POST",
+    headers: internalHeaders,
+    body: restoreLease,
+  });
+  await fetch(`${baseUrl}/internal/v1/agent-jobs/${restoreJob.id}/settle`, {
+    method: "POST",
+    headers: internalHeaders,
+    body: JSON.stringify({
+      owner: "agent_2",
+      fencingToken: restored.lease.fencingToken,
+      state: "succeeded",
+    }),
+  });
 
   const visible = await fetch(`${baseUrl}/api/agent-jobs/${queued.id}`, {
     headers: authorizedHeaders(),

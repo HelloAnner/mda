@@ -1,16 +1,22 @@
 #!/usr/bin/env bun
 
+import { existsSync } from "node:fs";
+import { rename, rm } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import {
   type Dashboard,
   DashboardListResponseSchema,
+  type DashboardRevision,
+  DashboardRevisionFileListResponseSchema,
+  DashboardRevisionListResponseSchema,
+  DashboardRevisionSchema,
   DashboardSchema,
   type ServiceMetadata,
   ServiceMetadataSchema,
 } from "@mda/contracts";
 import { Value } from "@sinclair/typebox/value";
 import packageJson from "../package.json" with { type: "json" };
-import { ApiClientError, apiRequest } from "./client/api.ts";
+import { ApiClientError, apiFetch, apiRequest } from "./client/api.ts";
 import { chat } from "./interactive/chat.ts";
 
 const help = `mda ${packageJson.version}
@@ -24,6 +30,12 @@ Commands:
   dashboard list [--limit <n>]
   dashboard create --name <name> [--description <text>] [--idempotency-key <key>]
   dashboard show <dashboard-id>
+  dashboard save <dashboard-id> [--message <text>]
+  revision list --dashboard <dashboard-id> [--limit <n>]
+  revision show <revision-id>
+  revision files <revision-id>
+  revision read <revision-id> <path>
+  revision export <revision-id> [--output <path>] [--force]
 
 Global options:
   --api-url <url>  Control Plane URL
@@ -48,6 +60,19 @@ function printDashboard(dashboard: Dashboard): void {
   );
 }
 
+function printRevision(revision: DashboardRevision): void {
+  console.log(
+    [
+      revision.id,
+      `r${revision.number}`,
+      revision.fileCount,
+      revision.totalBytes,
+      revision.digest,
+      revision.createdAt,
+    ].join("\t"),
+  );
+}
+
 function exitCode(error: ApiClientError): number {
   if (error.status === 401 || error.status === 403) return 3;
   if (error.status === 404 || error.status === 409) return 4;
@@ -63,10 +88,13 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
       allowPositionals: true,
       options: {
         "api-url": { type: "string" },
+        dashboard: { type: "string" },
         description: { type: "string" },
+        force: { type: "boolean" },
         help: { type: "boolean", short: "h" },
         "idempotency-key": { type: "string" },
         limit: { type: "string" },
+        message: { type: "string" },
         name: { type: "string" },
         output: { type: "string" },
         tenant: { type: "string" },
@@ -91,8 +119,11 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
     stringValue(parsed.values["api-url"]) ??
     process.env.MDA_API_URL ??
     "http://localhost:8080";
-  const output =
-    stringValue(parsed.values.output) ?? process.env.MDA_OUTPUT ?? "human";
+  const isRevisionExport =
+    parsed.positionals[0] === "revision" && parsed.positionals[1] === "export";
+  const output = isRevisionExport
+    ? (process.env.MDA_OUTPUT ?? "human")
+    : (stringValue(parsed.values.output) ?? process.env.MDA_OUTPUT ?? "human");
   if (output !== "human" && output !== "json") {
     console.error("--output must be human or json");
     return 2;
@@ -127,6 +158,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
 
   if (
     parsed.positionals[0] !== "dashboard" &&
+    parsed.positionals[0] !== "revision" &&
     parsed.positionals[0] !== "chat"
   ) {
     console.error(`Unknown command: ${parsed.positionals.join(" ")}`);
@@ -152,6 +184,105 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
     }
 
     const action = parsed.positionals[1];
+    if (parsed.positionals[0] === "revision") {
+      if (action === "list" && parsed.positionals.length === 2) {
+        const dashboardId = stringValue(parsed.values.dashboard);
+        if (!dashboardId) {
+          console.error("revision list requires --dashboard");
+          return 2;
+        }
+        const rawLimit = stringValue(parsed.values.limit) ?? "50";
+        const limit = Number(rawLimit);
+        if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+          console.error("--limit must be an integer between 1 and 100");
+          return 2;
+        }
+        const body = await apiRequest(
+          config,
+          `/api/dashboards/${encodeURIComponent(dashboardId)}/revisions?limit=${limit}`,
+        );
+        if (!Value.Check(DashboardRevisionListResponseSchema, body)) {
+          throw new Error("Control Plane returned invalid Revision data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else body.items.forEach(printRevision);
+        return 0;
+      }
+
+      if (action === "show" && parsed.positionals.length === 3) {
+        const body = await apiRequest(
+          config,
+          `/api/revisions/${encodeURIComponent(parsed.positionals[2] ?? "")}`,
+        );
+        if (!Value.Check(DashboardRevisionSchema, body)) {
+          throw new Error("Control Plane returned invalid Revision data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else printRevision(body);
+        return 0;
+      }
+
+      if (action === "files" && parsed.positionals.length === 3) {
+        const body = await apiRequest(
+          config,
+          `/api/revisions/${encodeURIComponent(parsed.positionals[2] ?? "")}/files`,
+        );
+        if (!Value.Check(DashboardRevisionFileListResponseSchema, body)) {
+          throw new Error("Control Plane returned invalid Revision files");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else {
+          for (const file of body.items) {
+            console.log(
+              [
+                file.path,
+                file.size,
+                file.digest,
+                file.executable ? "x" : "-",
+              ].join("\t"),
+            );
+          }
+        }
+        return 0;
+      }
+
+      if (action === "read" && parsed.positionals.length === 4) {
+        const response = await apiFetch(
+          config,
+          `/api/revisions/${encodeURIComponent(parsed.positionals[2] ?? "")}/files/${encodeURIComponent(parsed.positionals[3] ?? "")}`,
+        );
+        process.stdout.write(Buffer.from(await response.arrayBuffer()));
+        return 0;
+      }
+
+      if (action === "export" && parsed.positionals.length === 3) {
+        const revisionId = parsed.positionals[2] ?? "";
+        const path =
+          stringValue(parsed.values.output) ?? `${revisionId}.tar.gz`;
+        if (existsSync(path) && !parsed.values.force) {
+          console.error(`Refusing to overwrite existing file: ${path}`);
+          return 4;
+        }
+        const response = await apiFetch(
+          config,
+          `/api/revisions/${encodeURIComponent(revisionId)}/export`,
+        );
+        const temporary = `${path}.tmp-${crypto.randomUUID()}`;
+        try {
+          await Bun.write(temporary, response);
+          await rename(temporary, path);
+        } finally {
+          await rm(temporary, { force: true });
+        }
+        console.log(path);
+        return 0;
+      }
+
+      console.error(
+        `Unknown revision command: ${parsed.positionals.slice(1).join(" ")}`,
+      );
+      return 2;
+    }
     if (action === "list" && parsed.positionals.length === 2) {
       const rawLimit = stringValue(parsed.values.limit) ?? "50";
       const limit = Number(rawLimit);
@@ -193,6 +324,28 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
       }
       if (output === "json") console.log(JSON.stringify(body));
       else printDashboard(body);
+      return 0;
+    }
+
+    if (action === "save" && parsed.positionals.length === 3) {
+      const body = await apiRequest(
+        config,
+        `/api/dashboards/${encodeURIComponent(parsed.positionals[2] ?? "")}/revisions`,
+        {
+          method: "POST",
+          headers: { "idempotency-key": crypto.randomUUID() },
+          body: JSON.stringify({
+            ...(stringValue(parsed.values.message)
+              ? { message: stringValue(parsed.values.message) }
+              : {}),
+          }),
+        },
+      );
+      if (!Value.Check(DashboardRevisionSchema, body)) {
+        throw new Error("Control Plane returned invalid Revision data");
+      }
+      if (output === "json") console.log(JSON.stringify(body));
+      else printRevision(body);
       return 0;
     }
 

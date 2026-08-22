@@ -3,6 +3,7 @@ import {
   AgentJobSchema,
   AgentTerminalErrorSchema,
 } from "../../../public/v1/agent-work.ts";
+import { AgentWorkspaceRestoreSchema } from "./workspace.ts";
 
 export const ClaimAgentJobRequestSchema = Type.Object(
   { owner: Type.String({ minLength: 1, maxLength: 200 }) },
@@ -64,6 +65,7 @@ export const ClaimedAgentJobSchema = Type.Object(
     job: AgentJobSchema,
     prompt: Type.String({ minLength: 1, maxLength: 20_000 }),
     dataSources: AgentDataSourceContextSchema,
+    workspace: Type.Optional(AgentWorkspaceRestoreSchema),
     lease: Type.Object(
       {
         owner: Type.String({ minLength: 1 }),

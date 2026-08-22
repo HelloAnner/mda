@@ -42,6 +42,9 @@ ensure_local_secrets() {
       printf 'MDA_BIND_ADDRESS=%s\n' "$MDA_BIND_ADDRESS"
       printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 16)"
       printf 'REDIS_PASSWORD=%s\n' "$(openssl rand -hex 16)"
+      printf 'MINIO_ACCESS_KEY=%s\n' "$(openssl rand -hex 12)"
+      printf 'MINIO_SECRET_KEY=%s\n' "$(openssl rand -hex 32)"
+      printf 'S3_BUCKET=mda-artifacts\n'
       printf 'INTERNAL_AGENT_TOKEN=%s\n' "$(openssl rand -hex 32)"
       printf 'MDA_ACCESS_PASSWORD=%s\n' "$(openssl rand -hex 16)"
       printf 'LLM_BASE_URL=%s\n' "${LLM_BASE_URL:-https://api.deepseek.com/v1}"
@@ -51,6 +54,16 @@ ensure_local_secrets() {
     info "using existing $LOCAL_ENV"
   fi
   chmod 0600 "$LOCAL_ENV"
+  command -v openssl >/dev/null || die "openssl is required to manage $LOCAL_ENV"
+  if ! grep -q '^MINIO_ACCESS_KEY=' "$LOCAL_ENV"; then
+    printf 'MINIO_ACCESS_KEY=%s\n' "$(openssl rand -hex 12)" >>"$LOCAL_ENV"
+  fi
+  if ! grep -q '^MINIO_SECRET_KEY=' "$LOCAL_ENV"; then
+    printf 'MINIO_SECRET_KEY=%s\n' "$(openssl rand -hex 32)" >>"$LOCAL_ENV"
+  fi
+  if ! grep -q '^S3_BUCKET=' "$LOCAL_ENV"; then
+    printf 'S3_BUCKET=mda-artifacts\n' >>"$LOCAL_ENV"
+  fi
 
   mkdir -p var/secrets
   chmod 700 var/secrets
@@ -74,6 +87,12 @@ bootstrap_remote_secrets() {
     info "bootstrapping server .env"
     ssh "$SSH_HOST" "umask 077; cat > '$REMOTE_DIR/.env'" <"$LOCAL_ENV"
   fi
+  awk -F= '
+    $1 == "MINIO_ACCESS_KEY" ||
+    $1 == "MINIO_SECRET_KEY" ||
+    $1 == "S3_BUCKET" { print }
+  ' "$LOCAL_ENV" | ssh "$SSH_HOST" \
+    "while IFS= read -r line; do key=\"\${line%%=*}\"; grep -q \"^\${key}=\" '$REMOTE_DIR/.env' || printf '%s\\n' \"\$line\" >> '$REMOTE_DIR/.env'; done"
   ssh "$SSH_HOST" "chmod 0600 '$REMOTE_DIR/.env'"
 
   if ssh "$SSH_HOST" "test -f '$REMOTE_DIR/var/secrets/model_api_key'"; then

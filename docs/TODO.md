@@ -76,13 +76,23 @@ This file tracks implementation status. The detailed contracts and architecture 
 - [x] Verify concurrent same-dashboard Sessions cannot overwrite each other's files.
 - [x] Verify dozens-scale capacity plus real Chinese small talk, multi-turn memory, Bash/file Tools, Data Source refusal, and Coding Agent writes with the literal `mda` CLI.
 
+### Source artifacts and Revisions
+
+- [x] Add private MinIO-backed source artifact storage without giving S3 credentials to Agents.
+- [x] Capture bounded, path-safe, content-addressed source snapshots after successful Agent edits.
+- [x] Fence Checkpoint activation with the authoritative Job lease and Draft parent.
+- [x] Restore the latest successful Checkpoint into new Session workspaces.
+- [x] Add immutable, monotonic Dashboard Revisions with idempotency, audit, and outbox records.
+- [x] Add Dashboard save plus Revision list, show, files, read, and deterministic `tar.gz` export CLI flows.
+- [x] Verify cross-Session source continuity and Main/MinIO restart durability against `moss-dev-2`.
+
 ## Next
 
 Continue the authoritative authoring and Agent Job path:
 
-- [ ] Add immutable Draft Checkpoints and Dashboard Revisions with artifact references and Query Bindings.
-- [ ] Move shared-volume Pi Session and workspace snapshots to S3/MinIO before multi-host deployment.
 - [ ] Add the fixed React/Vite Dashboard Template and build/preview Tools.
+- [ ] Bind immutable Query Revisions to Dashboard Revisions.
+- [ ] Move Pi Session history from the shared Agent volume to S3/MinIO before multi-host deployment.
 - [ ] Add the expired-lease recovery sweep and Redis pending-entry reclaim.
 - [ ] Add cancellation wake-ups that abort an active Pi Session immediately instead of on heartbeat.
 - [ ] Add Data Source Service PostgreSQL migrations and its separate database role.
@@ -101,15 +111,15 @@ Continue the authoritative authoring and Agent Job path:
 - [ ] Remaining PostgreSQL schemas, migrations, constraints, and separate service roles.
 - [ ] Idempotency, audit, and transactional outbox primitives.
 - [ ] Redis event wake-ups and pending-entry recovery; Streams and outbox dispatch now run.
-- [ ] S3/MinIO artifact storage.
+- [x] Private S3/MinIO source artifact storage with persistent Compose volume and readiness checks.
 - [ ] Import-boundary test between workspaces and services.
 
 ### Dashboard authoring and Agent work
 
 - [ ] Dashboard metadata CRUD and archive behavior.
-- [ ] Draft Checkpoints and immutable Dashboard Revisions.
+- [x] Draft Checkpoints and immutable Dashboard Revisions.
 - [ ] Query Bindings owned by Dashboard Revisions.
-- [ ] S3-backed Pi Session and workspace artifacts; shared-volume multi-replica Session resume now works.
+- [ ] S3-backed Pi Session history; source workspaces now restore from MinIO Checkpoints.
 - [ ] Persisted expired-lease recovery, immediate cancellation wake-ups, and Redis reclaim.
 - [x] Durable ordered Agent Events and SSE replay.
 - [x] Independently scalable `mda-agent` image consuming Redis Streams.
@@ -117,7 +127,7 @@ Continue the authoritative authoring and Agent Job path:
 - [x] Explicit Pi `ResourceLoader`, Coding Tool allowlist, platform-maintained progressive Dashboard Skill catalog, and read-only Data Source summary prompt section.
 - [x] Restrict Moss's business operations to Dashboard generation; Data Source management stays outside its Tool boundary.
 - [ ] Agent Tools for source discovery, queries, validation, preview, and publishing.
-- [ ] Workspace restore, checkpoint, build, upload, settlement, and cleanup flow.
+- [ ] Build, Preview upload, Pi history upload, and retention cleanup; source restore, Checkpoint upload, and fenced settlement now work.
 - [ ] Preview build and isolated iframe rendering.
 
 ### Data Access
@@ -148,7 +158,7 @@ Continue the authoritative authoring and Agent Job path:
 - [ ] Dashboard generation with build/preview; continuous core chat now works.
 - [ ] Session resume, fork, inspect, compact, and export.
 - [ ] Job watch, event replay, cancellation, retry, Tool inspection, errors, logs, and statistics.
-- [ ] Dashboard validation, preview, save, publish, and export.
+- [ ] Dashboard validation, Preview, publication, and complete export; save and source Revision export now work.
 - [ ] Source and Query commands.
 - [ ] Simulation, audit, completion, and full deployment diagnostics.
 - [ ] Management Web screens for the same Control Plane capabilities.
@@ -175,6 +185,10 @@ bun test
 docker compose --env-file .env.local up -d --build --scale agent=3
 mda doctor
 mda chat <dashboard-id>
+mda dashboard save <dashboard-id> --message "First Revision"
+mda revision list --dashboard <dashboard-id>
+mda revision files <revision-id>
+mda revision export <revision-id> --output dashboard-source.tar.gz
 
 bun run dev
 bun run agent

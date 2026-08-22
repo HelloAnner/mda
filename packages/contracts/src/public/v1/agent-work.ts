@@ -15,6 +15,7 @@ export const AgentEventTypeSchema = Type.Union([
   Type.Literal("assistant.completed"),
   Type.Literal("tool.started"),
   Type.Literal("tool.completed"),
+  Type.Literal("draft.checkpoint.saved"),
   Type.Literal("agent.failed"),
   Type.Literal("agent.completed"),
 ]);

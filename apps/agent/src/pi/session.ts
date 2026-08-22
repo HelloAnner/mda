@@ -9,8 +9,13 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { AgentDataSourceContext, AgentEventType } from "@mda/contracts";
+import type {
+  AgentDataSourceContext,
+  AgentEventType,
+  SourceSnapshot,
+} from "@mda/contracts";
 import type { AgentConfig } from "../config.ts";
+import { restoreWorkspace } from "../workspace.ts";
 
 export type PiModelRuntime = {
   modelRuntime: ModelRuntime;
@@ -193,6 +198,7 @@ export async function runPiSession(
     sessionId: string;
     prompt: string;
     dataSources: AgentDataSourceContext;
+    workspaceSnapshot?: SourceSnapshot;
     signal: AbortSignal;
     onEvent(type: AgentEventType, data: Record<string, unknown>): void;
   },
@@ -203,10 +209,10 @@ export async function runPiSession(
     input.sessionId,
   );
   await Promise.all([
-    mkdir(paths.workspace, { recursive: true }),
     mkdir(paths.history, { recursive: true }),
     mkdir(paths.runtime, { recursive: true }),
   ]);
+  await restoreWorkspace(paths.workspace, input.workspaceSnapshot);
 
   // ponytail: the shared Docker volume is single-host durability; move snapshots to S3 before multi-host deployment.
   const settingsManager = SettingsManager.inMemory({

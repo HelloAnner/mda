@@ -28,6 +28,18 @@ const GlobalConfigFileSchema = Type.Object(
         { additionalProperties: false },
       ),
     ),
+    artifacts: Type.Optional(
+      Type.Object(
+        {
+          endpoint: Type.Optional(Type.String({ minLength: 1 })),
+          bucket: Type.Optional(Type.String({ minLength: 3, maxLength: 63 })),
+          region: Type.Optional(Type.String({ minLength: 1 })),
+          access_key_env: Type.Optional(EnvironmentNameSchema),
+          secret_key_env: Type.Optional(EnvironmentNameSchema),
+        },
+        { additionalProperties: false },
+      ),
+    ),
     auth: Type.Optional(
       Type.Object(
         {
@@ -89,6 +101,15 @@ const ConfigSchema = Type.Object(
     port: Type.Integer({ minimum: 1, maximum: 65_535 }),
     databaseUrl: Type.String({ pattern: "^postgres(ql)?://" }),
     redisUrl: Type.String({ pattern: "^rediss?://" }),
+    artifactEndpoint: Type.String({ pattern: "^https?://" }),
+    artifactBucket: Type.String({
+      minLength: 3,
+      maxLength: 63,
+      pattern: "^[a-z0-9][a-z0-9.-]*[a-z0-9]$",
+    }),
+    artifactRegion: Type.String({ minLength: 1 }),
+    artifactAccessKeyId: Type.String({ minLength: 3 }),
+    artifactSecretAccessKey: Type.String({ minLength: 8 }),
     authMode: Type.Union([Type.Literal("oidc"), Type.Literal("password")]),
     localTenantId: Type.String({ minLength: 1 }),
     localUserId: Type.String({ minLength: 1 }),
@@ -107,6 +128,11 @@ export interface Config {
   port: number;
   databaseUrl: string;
   redisUrl: string;
+  artifactEndpoint: string;
+  artifactBucket: string;
+  artifactRegion: string;
+  artifactAccessKeyId: string;
+  artifactSecretAccessKey: string;
   authMode: "oidc" | "password";
   localTenantId: string;
   localUserId: string;
@@ -165,6 +191,10 @@ export function loadConfig(
   const redisUrlEnv = file.redis?.url_env ?? "REDIS_URL";
   const accessPasswordEnv =
     file.server?.access_password_env ?? "MDA_ACCESS_PASSWORD";
+  const artifactAccessKeyEnv =
+    file.artifacts?.access_key_env ?? "S3_ACCESS_KEY_ID";
+  const artifactSecretKeyEnv =
+    file.artifacts?.secret_key_env ?? "S3_SECRET_ACCESS_KEY";
   const internalTokenEnv =
     file.agent?.internal_token_env ?? "INTERNAL_AGENT_TOKEN";
   const config = {
@@ -172,6 +202,14 @@ export function loadConfig(
     port: Number(env.PORT ?? file.server?.port ?? 8080),
     databaseUrl: env.DATABASE_URL ?? env[databaseUrlEnv] ?? "",
     redisUrl: env.REDIS_URL ?? env[redisUrlEnv] ?? "",
+    artifactEndpoint:
+      env.S3_ENDPOINT ?? file.artifacts?.endpoint ?? "http://localhost:9000",
+    artifactBucket: env.S3_BUCKET ?? file.artifacts?.bucket ?? "mda-artifacts",
+    artifactRegion: env.S3_REGION ?? file.artifacts?.region ?? "us-east-1",
+    artifactAccessKeyId:
+      env.S3_ACCESS_KEY_ID ?? env[artifactAccessKeyEnv] ?? "",
+    artifactSecretAccessKey:
+      env.S3_SECRET_ACCESS_KEY ?? env[artifactSecretKeyEnv] ?? "",
     authMode: env.MDA_AUTH_MODE ?? file.auth?.mode ?? "oidc",
     localTenantId: env.MDA_LOCAL_TENANT ?? file.auth?.tenant_id ?? "local",
     localUserId: env.MDA_LOCAL_USER ?? file.auth?.user_id ?? "local-admin",
@@ -192,6 +230,12 @@ export function loadConfig(
   if (!Value.Check(ConfigSchema, config)) {
     throw new Error(
       `Invalid configuration: ${validationErrors(ConfigSchema, config)}`,
+    );
+  }
+  const artifactEndpoint = new URL(config.artifactEndpoint);
+  if (artifactEndpoint.username || artifactEndpoint.password) {
+    throw new Error(
+      "Invalid configuration: artifact credentials must not be embedded in endpoint",
     );
   }
   if (

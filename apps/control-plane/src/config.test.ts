@@ -8,6 +8,11 @@ const valid = {
   HOST: "0.0.0.0",
   DATABASE_URL: "postgres://mda:test@localhost/mda",
   REDIS_URL: "redis://localhost:6379",
+  S3_ENDPOINT: "http://localhost:9000",
+  S3_BUCKET: "mda-artifacts",
+  S3_REGION: "us-east-1",
+  S3_ACCESS_KEY_ID: "test-access-key",
+  S3_SECRET_ACCESS_KEY: "test-secret-key",
   OIDC_ISSUER: "https://identity.example",
   OIDC_AUDIENCE: "mda",
   OIDC_JWKS_URL: "https://identity.example/.well-known/jwks.json",
@@ -22,6 +27,11 @@ test("loads and converts startup configuration", () => {
     port: 9090,
     databaseUrl: valid.DATABASE_URL,
     redisUrl: valid.REDIS_URL,
+    artifactEndpoint: valid.S3_ENDPOINT,
+    artifactBucket: valid.S3_BUCKET,
+    artifactRegion: valid.S3_REGION,
+    artifactAccessKeyId: valid.S3_ACCESS_KEY_ID,
+    artifactSecretAccessKey: valid.S3_SECRET_ACCESS_KEY,
     authMode: "oidc",
     localTenantId: "local",
     localUserId: "local-admin",
@@ -46,6 +56,12 @@ access_password_env = "TEST_ACCESS_PASSWORD"
 url_env = "TEST_DATABASE_URL"
 [redis]
 url_env = "TEST_REDIS_URL"
+[artifacts]
+endpoint = "http://minio:9000"
+bucket = "mda-artifacts"
+region = "us-east-1"
+access_key_env = "TEST_S3_ACCESS_KEY"
+secret_key_env = "TEST_S3_SECRET_KEY"
 [oidc]
 issuer = "https://identity.example"
 audience = "mda"
@@ -69,6 +85,8 @@ api_key_env = "TEST_MODEL_API_KEY"
         TEST_REDIS_URL: valid.REDIS_URL,
         TEST_INTERNAL_TOKEN: valid.INTERNAL_AGENT_TOKEN,
         TEST_ACCESS_PASSWORD: valid.MDA_ACCESS_PASSWORD,
+        TEST_S3_ACCESS_KEY: valid.S3_ACCESS_KEY_ID,
+        TEST_S3_SECRET_KEY: valid.S3_SECRET_ACCESS_KEY,
       }),
     ).toMatchObject({
       port: 9091,

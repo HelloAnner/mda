@@ -10,6 +10,8 @@ import { loadConfig } from "./config.ts";
 import { startAgentJobDispatcher } from "./contexts/agent-work/dispatch.ts";
 import { handleAgentWorkRequest } from "./contexts/agent-work/routes.ts";
 import { handleDashboardRequest } from "./contexts/dashboards/routes.ts";
+import { handleRevisionRequest } from "./contexts/revisions/routes.ts";
+import { type ArtifactStore, S3ArtifactStore } from "./shared/artifacts.ts";
 import {
   authorizeGlobalAccess,
   createAuthenticator,
@@ -39,6 +41,7 @@ interface ServerDependencies {
   agentLeaseMs?: number;
   accessPassword?: string;
   redis?: RedisClient;
+  artifacts?: ArtifactStore;
 }
 
 export function startServer(
@@ -61,6 +64,7 @@ export function startServer(
         try {
           await dependencies.db`SELECT 1`;
           if (dependencies.redis) await dependencies.redis.ping();
+          if (dependencies.artifacts) await dependencies.artifacts.ready();
           return Response.json(health);
         } catch {
           return errorResponse(
@@ -94,6 +98,11 @@ export function startServer(
           dependencies,
         );
         if (agentResponse) return agentResponse;
+        const revisionResponse = await handleRevisionRequest(
+          request,
+          dependencies,
+        );
+        if (revisionResponse) return revisionResponse;
         const dashboardResponse = await handleDashboardRequest(
           request,
           dependencies,
@@ -117,6 +126,14 @@ if (import.meta.main) {
   const db = createDatabase(config.databaseUrl);
   const redis = new RedisClient(config.redisUrl);
   await redis.connect();
+  const artifacts = new S3ArtifactStore({
+    endpoint: config.artifactEndpoint,
+    bucket: config.artifactBucket,
+    region: config.artifactRegion,
+    accessKeyId: config.artifactAccessKeyId,
+    secretAccessKey: config.artifactSecretAccessKey,
+  });
+  await artifacts.ready();
   startAgentJobDispatcher(db, redis);
   if (config.authMode === "password") {
     await ensureLocalPrincipal(db, config.localTenantId, config.localUserId);
@@ -139,6 +156,7 @@ if (import.meta.main) {
     agentLeaseMs: config.agentLeaseMs,
     accessPassword: config.accessPassword,
     redis,
+    artifacts,
   });
   console.log(
     JSON.stringify({

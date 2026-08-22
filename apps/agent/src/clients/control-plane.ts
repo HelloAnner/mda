@@ -3,6 +3,8 @@ import type {
   AgentJob,
   AgentLeaseCommand,
   AgentTerminalError,
+  CheckpointAgentWorkspaceRequest,
+  CheckpointAgentWorkspaceResponse,
   ClaimedAgentJob,
   PendingAgentEvent,
 } from "@mda/contracts";
@@ -59,6 +61,12 @@ export function createControlPlaneClient(baseUrl: string, token: string) {
         `/internal/v1/agent-jobs/${encodeURIComponent(jobId)}/heartbeat`,
         command,
       ) as Promise<AgentJob>;
+    },
+    checkpoint(jobId: string, command: CheckpointAgentWorkspaceRequest) {
+      return request(
+        `/internal/v1/agent-jobs/${encodeURIComponent(jobId)}/checkpoint`,
+        command,
+      ) as Promise<CheckpointAgentWorkspaceResponse>;
     },
     appendEvents(
       jobId: string,
