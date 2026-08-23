@@ -1,6 +1,6 @@
 ---
 name: measure-dashboard-requirements
-description: Defines the audience, decisions, questions, metric formulas, source and quality needs, refresh cadence, filters, access constraints, states, and acceptance criteria for a dashboard. Use before creating a new dashboard or materially redesigning one; stop for approval before coding.
+description: Defines the audience, decisions, questions, metric formulas, evidence-backed multi-view roles, source and quality needs, refresh cadence, filters, access constraints, states, and acceptance criteria for a dashboard. Use before creating or materially redesigning one; stop for approval before coding.
 license: Apache-2.0; see LICENSE.txt
 metadata:
   author: product-on-purpose
@@ -10,14 +10,14 @@ metadata:
 <!--
 Adapted by MDA from product-on-purpose/pm-skills at the revision above.
 Changes: tailored the output to MDA's conversational workflow and read-only Data
-Source boundary; delegated chart selection; added workflow-board semantics, state,
-and approval requirements; removed references to unrelated PM Skills and
-unsupported capabilities.
+Source boundary; added evidence-backed multi-view composition intent while
+delegating encoding selection; added workflow-board semantics, state, and approval
+requirements; removed references to unrelated PM Skills and unsupported capabilities.
 -->
 
 # Dashboard Requirements
 
-A useful dashboard starts with the decisions and questions it must support, not a collection of charts. Use this Skill to turn a request into a concise, testable implementation brief.
+A useful dashboard starts with the decisions and questions it must support, not a collection of charts. When the evidence supports several distinct questions, it usually combines complementary overview, diagnostic, comparison, detail, and action views rather than collapsing everything into one visualization. Use this Skill to turn a request into a concise, testable implementation brief without imposing a component quota.
 
 ## When to use
 
@@ -37,7 +37,7 @@ Define:
 
 - The primary audience, expertise, viewing context, device, and usage frequency.
 - The decisions or actions the dashboard should inform.
-- One primary question and a small number of supporting questions.
+- One primary question and a small number of supporting questions, classified by whether they orient, explain, compare, verify detail, or support action.
 - The time horizon and decision latency: live response, daily operation, periodic review, or long-term explanation.
 - What is explicitly out of scope.
 
@@ -57,11 +57,13 @@ For every proposed metric, capture:
 
 Do not convert an unknown into a plausible-looking number. If a formula or source is not established, label it `TBD` and make confirmation an acceptance dependency. Distinguish zero, missing, unknown, not applicable, delayed, estimated, and suppressed values.
 
-## 3. Evidence and visualization needs
+## 3. Dashboard composition and evidence needs
 
-Describe the analytical relationship each view must communicate—status, trend, comparison, ranking, distribution, composition, deviation, correlation, flow, or geography—and the precision and interaction required.
+Describe the analytical relationship each view must communicate—status, trend, comparison, ranking, distribution, composition, deviation, correlation, flow, geography, or exact lookup—and the precision and interaction required.
 
-Do **not** choose charts here. Load `data-visualization` after approval and let it own encoding selection. This separation prevents the requirements document from becoming a fixed component or chart specification.
+When authorized evidence supports multiple approved questions, default to a coordinated multi-view dashboard. Define the **role** of each necessary view—such as orientation, diagnosis, comparison, detail, or action—its question, priority, evidence, and shared filter scope. Prefer different data-component roles when they add a genuinely different relationship or level of precision. A single view is valid when the user explicitly requests it or the evidence supports only one relationship; record that reason rather than accepting a single component as an unexamined default.
+
+Do **not** choose charts or prescribe a component count here. Load `data-visualization` after approval and let it own the smallest useful view portfolio and encoding selection. Do not invent weak supporting views, repeat one metric in several forms, or require every role. This separation prevents the requirements document from becoming a fixed component or chart specification.
 
 ## 4. Filters, interactions, and states
 
@@ -73,7 +75,7 @@ Specify only controls that support a real decision:
 - Mobile, keyboard, long-label, large-result, and reduced-motion expectations.
 - Any alert, export, sharing, or persistence need as a requirement—not as an available capability unless a Tool or platform contract confirms it.
 
-For Kanban or workflow-board requests, define the card entity grain, lane semantics, default ordering, WIP and aging rules, blocked/unknown handling, detail path, and expected scan density. Record whether moving an item is only a desired interaction or a confirmed persistent mutation capability; never infer write-back from a visual board request.
+For Kanban or workflow-board requests, define the card entity grain, lane semantics, default ordering, WIP and aging rules, blocked/unknown handling, detail path, and expected scan density. Also decide whether the board is the whole product or the primary operational surface within a broader dashboard supported by truthful summary, flow, aging, bottleneck, or detail evidence. Record whether moving an item is only a desired interaction or a confirmed persistent mutation capability; never infer write-back from a visual board request.
 
 ## 5. Data access and privacy
 
@@ -101,6 +103,7 @@ Before requesting approval, verify that the brief answers:
 - Who uses this, to make which decision, at what cadence?
 - What exact questions and metric contracts support that decision?
 - Which authorized evidence exists, and what remains unknown?
+- Do the proposed view roles form the smallest coherent dashboard for the approved questions, or is a documented single-view exception more truthful?
 - Which filters, states, privacy constraints, and responsive contexts matter?
 - How will implementation be accepted without assuming unsupported capabilities?
 - Are all fixture-data and uncertainty labels explicit?

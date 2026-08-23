@@ -1,10 +1,26 @@
 ---
 name: frontend-design
-description: Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic direction, typography, and making choices that don't read as templated defaults.
+description: Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. For MDA dashboards, keeps varied data components coherent, hierarchical, responsive, and unlike templated landing pages.
 license: Complete terms in LICENSE.txt
+metadata:
+  author: anthropic
+  upstream-revision: 3b3fad96af16a10759d930941b4520ba0c40edae
+  mda-adapted: "true"
 ---
+<!--
+Adapted by MDA from anthropics/skills at the revision above.
+Changes: added a dashboard decision-interface preface; retained the upstream
+subject grounding, visual direction, process, restraint, and interface-writing
+guidance.
+-->
 
 # Frontend Design
+
+## MDA dashboard adaptation
+
+Treat an MDA dashboard as a durable decision interface, not a marketing landing page or an editorial poster. Follow the approved view portfolio from `data-visualization`: when evidence supports multiple questions, give complementary summaries, analytical views, tables, lists, boards, or details a clear shared hierarchy while allowing their internal forms to differ. A primary view may dominate, but it should not orphan the scope, explanation, exact evidence, or action path that users need.
+
+Do not flatten every view into the same rounded card, repeat one metric as visual filler, or replace dashboard structure with an oversized headline and decorative hero. Use common tokens, alignment, filters, and state language to make varied data components feel like one product. On narrow screens, reprioritize and progressively disclose those roles instead of mechanically stacking every desktop panel. The “hero is a thesis” guidance below means the dashboard's analytical or operational anchor in this context; it does not require a landing-page hero section.
 
 Approach this as the design lead at a small studio known for giving every client a visual identity that could not be mistaken for anyone else's. This client has already rejected proposals that felt templated, and is paying for a distinctive point of view: make deliberate, opinionated choices about palette, typography, and layout that are specific to this brief, and take one real aesthetic risk you can justify.
 

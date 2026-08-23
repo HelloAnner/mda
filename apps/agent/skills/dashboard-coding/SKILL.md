@@ -44,7 +44,7 @@ Never fabricate a production field, formula, query, result, freshness time, or l
 
 ## Implementation loop
 
-1. Translate the approved brief into ordinary source code; no component registry, fixed grid, JSON UI schema, or Skill example is authoritative.
+1. Translate the approved brief and evidence-backed view portfolio into ordinary source code. Do not collapse distinct approved information roles into one convenient component, and do not invent extra views to satisfy a quota; no component registry, fixed grid, JSON UI schema, or Skill example is authoritative.
 2. Preserve good existing work. For a focused change, prefer a targeted `edit` over regenerating a complete existing file. Use `write` for a new file or only when a coherent rewrite is genuinely safer. Split large files by meaningful responsibility when useful, but never impose a mandatory source structure.
 3. Do not reread content immediately after a successful `write` or `edit` unless a later diagnostic requires it. Keep planning and completion prose concise so context remains available for implementation.
 4. Keep semantic structure, responsive behavior, keyboard paths, and all required data states in the implementation.

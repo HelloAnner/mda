@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentConfig } from "../config.ts";
@@ -69,6 +69,24 @@ test("loads the reviewed dashboard Skill catalog without diagnostics", () => {
     "webapp-testing",
     "web-quality-audit",
   ]);
+
+  const skillContent = (name: string) => {
+    const skill = skills.find((candidate) => candidate.name === name);
+    if (!skill) throw new Error(`Missing dashboard Skill: ${name}`);
+    return readFileSync(skill.filePath, "utf8");
+  };
+  expect(skillContent("measure-dashboard-requirements")).toContain(
+    "coordinated multi-view dashboard",
+  );
+  expect(skillContent("data-visualization")).toContain(
+    "## 2. Compose the dashboard",
+  );
+  expect(skillContent("frontend-design")).toContain(
+    "durable decision interface",
+  );
+  expect(skillContent("dashboard-kanban")).toContain(
+    "作为仪表板核心，而非唯一组件",
+  );
 });
 
 test("streams a real Pi SDK session through the configured LLM API", async () => {
@@ -189,6 +207,10 @@ test("streams a real Pi SDK session through the configured LLM API", async () =>
     expect(JSON.stringify(requestBodies[0])).toContain(
       "批准前不得编辑看板源码",
     );
+    expect(JSON.stringify(requestBodies[0])).toContain(
+      "优先构建真正的多视图仪表板",
+    );
+    expect(JSON.stringify(requestBodies[0])).toContain("互补的数据组件");
     expect(JSON.stringify(requestBodies[0])).toContain(
       "绝不构成组件目录、图表注册表、固定网格、JSON UI Schema 或文件模板",
     );

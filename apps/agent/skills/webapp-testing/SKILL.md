@@ -10,8 +10,9 @@ metadata:
 <!--
 Adapted by MDA from anthropics/skills at the revision above.
 Changes: retained the upstream Playwright reconnaissance-and-action workflow and
-helpers, added dashboard and Kanban state/interaction checks, and made MDA
-build/Preview capability boundaries and honest reporting explicit.
+helpers, added coordinated multi-component dashboard and Kanban state/interaction
+checks, and made MDA build/Preview capability boundaries and honest reporting
+explicit.
 -->
 
 # Web Application Testing
@@ -35,6 +36,7 @@ Do not add test files, package files, Playwright dependencies, screenshots, logs
 Read the approved requirements, source, and manifest. Inventory:
 
 - Global and local filters, defaults, dependent options, clear/reset actions, and preserved scope.
+- The approved dashboard view roles and every coordination path between summaries, charts, tables, lists, boards, and details; identify which components should update, highlight, or remain fixed together.
 - Tabs, links, drill paths, expandable regions, modals, menus, and return paths.
 - Sort, search, pagination, selection, export, and row actions that genuinely exist.
 - For Kanban or workflow boards: lane counts and WIP, card ordering and detail return, empty lanes, blocked/aging evidence, intentional board overflow, and move behavior only when persistent mutation actually exists.
@@ -65,7 +67,7 @@ For every control:
 
 - Confirm its default state and accessible name.
 - Perform the action by keyboard as well as pointer where applicable.
-- Assert the visible result, current filter scope, related metric/chart/table changes, and reset path.
+- Assert the visible result, current filter scope, every affected data component's coordinated update or highlight, unaffected context that should remain fixed, and the reset path. Fail silent mixed-scope states where one component remains stale or incompatible.
 - Confirm unrelated state is preserved and focus is not lost.
 - On a board, confirm filtering and refresh keep lane semantics and counts consistent. If moving cards is supported, test valid and invalid transitions, keyboard equivalence, save progress, failure rollback, and conflict behavior; otherwise verify that the UI does not imply write-back.
 - Repeat boundary cases: no matches, a single result, long values, rapid changes, and failed or delayed data when controllable.

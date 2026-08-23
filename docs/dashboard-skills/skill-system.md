@@ -2,20 +2,21 @@
 
 ## Purpose
 
-MDA uses a reviewed, project-pinned Agent Skill pack to raise dashboard quality without defining a component catalog, chart registry, layout schema, or proprietary UI model.
+MDA uses a reviewed, project-pinned Agent Skill pack to raise dashboard quality without defining a component catalog, chart registry, layout schema, or proprietary UI model. When authorized evidence supports several distinct questions, the default product shape is a coordinated multi-view dashboard rather than a single chart, poster, or homogeneous card wall.
 
 The Coding Agent remains the sole author of `src/**` and `public/**`. Professional upstream Skills own the reusable requirements, visualization, visual-design, React, functional-testing, and web-audit guidance. MDA-owned Skills contain only platform workflow or context-specific presentation and industry know-how.
 
 ## Principles
 
 1. **Purpose precedes form.** Every dashboard starts with its audience, decisions, questions, metric definitions, evidence, and acceptance criteria.
-2. **Professional foundations have one owner.** MDA does not keep a second home-grown version of generic design or visualization guidance.
-3. **Source remains free.** Skills never mandate a component, chart type, grid, CSS architecture, or file structure.
-4. **Data stays truthful.** Production data is never fabricated; fixtures are clearly labeled. Units, periods, baselines, denominators, freshness, uncertainty, truncation, and missing values remain visible when material.
-5. **States are part of the product.** Loading, empty, partial, stale, refreshing, error, unauthorized, and normal states receive intentional implementation and testing.
-6. **Progressive disclosure preserves context.** Skills are read at the stage where they affect a decision; optional context Skills are selected sparingly.
-7. **Industry knowledge is semantic, not cosmetic.** A healthcare Skill changes denominator, privacy, and risk-adjustment judgment; it does not require blue cards.
-8. **Tools remain the source of truth.** A Skill cannot create a data source, approve a dependency, run a browser, pass a build, or publish an artifact by assertion.
+2. **Composition is purposeful.** When evidence permits, prefer complementary orientation, diagnosis, comparison, detail, and action surfaces over one dominant visualization. Diversity must answer distinct questions; it is never a component quota or a reason to repeat metrics.
+3. **Professional foundations have one owner.** MDA does not keep a second home-grown version of generic design or visualization guidance.
+4. **Source remains free.** Skills never mandate a component, chart type, grid, CSS architecture, or file structure.
+5. **Data stays truthful.** Production data is never fabricated; fixtures are clearly labeled. Units, periods, baselines, denominators, freshness, uncertainty, truncation, and missing values remain visible when material.
+6. **States are part of the product.** Loading, empty, partial, stale, refreshing, error, unauthorized, and normal states receive intentional implementation and testing.
+7. **Progressive disclosure preserves context.** Skills are read at the stage where they affect a decision; optional context Skills are selected sparingly.
+8. **Industry knowledge is semantic, not cosmetic.** A healthcare Skill changes denominator, privacy, and risk-adjustment judgment; it does not require blue cards.
+9. **Tools remain the source of truth.** A Skill cannot create a data source, approve a dependency, run a browser, pass a build, or publish an artifact by assertion.
 
 ## Professional Workflow
 
@@ -24,9 +25,9 @@ Every new dashboard or material redesign follows these stages:
 | Stage | Skill | Required outcome |
 |---|---|---|
 | Platform boundaries | `dashboard-coding` | Inspect the workspace and data context; preserve MDA source, dependency, query, and validation boundaries. |
-| Requirements | `measure-dashboard-requirements` | Define audience, decisions, questions, metric formulas, source/quality needs, cadence, filters, access constraints, states, and acceptance criteria. Stop for approval before coding. |
-| Visualization | `data-visualization` | Select an encoding for each analytical relationship and explain why; preserve labels, units, baselines, uncertainty, and accessible alternatives. |
-| Visual design | `frontend-design` | Establish a subject-specific direction, compact tokens, hierarchy, typography, responsive behavior, and one restrained signature detail. |
+| Requirements | `measure-dashboard-requirements` | Define audience, decisions, questions, metric formulas, evidence-backed view roles, source/quality needs, cadence, filters, access constraints, states, and acceptance criteria. Stop for approval before coding. |
+| Visualization | `data-visualization` | Compose the smallest useful set of complementary data views, select an encoding for each analytical relationship, and preserve labels, units, baselines, uncertainty, coordinated scope, and accessible alternatives. |
+| Visual design | `frontend-design` | Make the result read as a subject-specific decision interface, with hierarchy across varied data components, compact tokens, typography, responsive behavior, and one restrained signature detail. |
 | React engineering | `vercel-react-best-practices` | Apply only rules compatible with the fixed React/Vite browser runtime and approved dependencies. |
 | Functional testing | `webapp-testing` | Exercise filters, table actions, navigation, keyboard paths, and data states at mobile and desktop widths when a runnable browser target is available. Never claim an unavailable browser run. |
 | Final quality gate | `web-quality-audit` | Review source-owned performance, WCAG accessibility, security, and web-quality concerns; fix critical and high findings and identify platform-owned or unverified items. |
@@ -41,10 +42,10 @@ The professional pack is vendored under `apps/agent/skills` so the explicit Agen
 
 | Skill | Upstream | Reviewed revision | License | MDA treatment |
 |---|---|---|---|---|
-| `measure-dashboard-requirements` | `product-on-purpose/pm-skills` | `69df49c3eff24b3fa1a29d0bd6a35ae400af4f3e` | Apache-2.0 | Adapted to produce an implementation brief, defer chart choice, capture workflow-board semantics, respect read-only source context, and avoid fabricated capabilities. |
-| `data-visualization` | `anthropics/knowledge-work-plugins` | `5267cf7bff3031921d4474b8e8f86ad02d2b8f6d` | Apache-2.0 | Adapted from Python-figure guidance to browser dashboards; retains chart-selection, accuracy, color, labeling, and accessibility know-how. |
-| `frontend-design` | `anthropics/skills` | `3b3fad96af16a10759d930941b4520ba0c40edae` | Apache-2.0 | Vendored unchanged. |
-| `webapp-testing` | `anthropics/skills` | `3b3fad96af16a10759d930941b4520ba0c40edae` | Apache-2.0 | Adapted with MDA capability, honesty, and Kanban interaction checks; upstream helper and examples remain bundled for environments with Playwright. |
+| `measure-dashboard-requirements` | `product-on-purpose/pm-skills` | `69df49c3eff24b3fa1a29d0bd6a35ae400af4f3e` | Apache-2.0 | Adapted to produce an implementation brief, capture evidence-backed multi-view composition and workflow-board semantics, defer encoding choice, respect read-only source context, and avoid fabricated capabilities. |
+| `data-visualization` | `anthropics/knowledge-work-plugins` | `5267cf7bff3031921d4474b8e8f86ad02d2b8f6d` | Apache-2.0 | Adapted from Python-figure guidance to browser dashboards; adds purposeful multi-view composition while retaining chart-selection, accuracy, color, labeling, and accessibility know-how. |
+| `frontend-design` | `anthropics/skills` | `3b3fad96af16a10759d930941b4520ba0c40edae` | Apache-2.0 | Adapted with an MDA decision-interface preface so the upstream hero guidance does not turn dashboards into landing pages or single-component posters. |
+| `webapp-testing` | `anthropics/skills` | `3b3fad96af16a10759d930941b4520ba0c40edae` | Apache-2.0 | Adapted with MDA capability, honesty, coordinated multi-component, and Kanban interaction checks; upstream helper and examples remain bundled for environments with Playwright. |
 | `vercel-react-best-practices` | `vercel-labs/agent-skills` | `dd089a8c752c966dee8bf0f27cb625ba193ffd9e` | MIT (declared by the Skill) | Vendored with a React/Vite compatibility preface; detailed rules remain on demand. |
 | `web-quality-audit` | `addyosmani/web-quality-skills` | `95d6e255afe1596b557d7a8498517884438f5b3a` | MIT | Adapted to separate Agent-owned findings from platform-owned headers, hosting, and shell concerns. |
 
@@ -101,8 +102,8 @@ A second industry Skill is appropriate only for an explicitly cross-domain reque
 
 1. User requirements and already-approved Session decisions take precedence unless they conflict with safety, truthful data communication, accessibility, or hard runtime boundaries.
 2. The MDA system prompt and `dashboard-coding` define platform capabilities. Upstream examples cannot authorize package installation, external network access, protected-file edits, Data Source management, browser execution, Preview success, or publication.
-3. `data-visualization` owns chart and encoding judgment. Requirements and industry Skills define the question, metric, and caveat rather than prescribing a duplicate chart catalog.
-4. `frontend-design` owns universal aesthetic direction. Presentation and industry Skills add only context-specific constraints.
+3. `data-visualization` owns view-portfolio, chart, and encoding judgment. Requirements and industry Skills define the question, view role, metric, and caveat rather than prescribing a duplicate component or chart catalog.
+4. `frontend-design` owns universal aesthetic direction and visual hierarchy across the selected components. Presentation and industry Skills add only context-specific constraints.
 5. `vercel-react-best-practices` is selective: Next.js, server-component, SWR, third-party script, and unavailable-package rules do not apply to the current template.
 6. `webapp-testing` and `web-quality-audit` must distinguish executed checks from source review. Missing browser, Lighthouse, screen-reader, field-data, HTTPS, CSP-header, or hosting access is reported as unverified or platform-owned, never as passed.
 7. Never fabricate production data. Sample or fixture data must be visibly labeled in the dashboard and completion report.
@@ -123,7 +124,7 @@ Automated tests verify:
 - Discovery produces no diagnostics.
 - All professional, presentation, and industry Skills are present.
 - Replaced generic Skill names are absent.
-- The system prompt contains the requirements approval gate, staged Skill names, component freedom, compatibility boundaries, and fixture-label rule.
+- The system prompt contains the requirements approval gate, staged Skill names, evidence-backed multi-view dashboard preference, component freedom, compatibility boundaries, and fixture-label rule.
 
 Deployment verification uses the newest local `bun run mda` against the newest deployed environment. A real dashboard conversation must first read requirements and matching context Skills, stop for approval, then read visualization/design/React/testing/audit Skills during implementation and accurately report which checks actually ran.
 
@@ -133,6 +134,7 @@ Deployment verification uses the newest local `bun run mda` against the newest d
 2. Every implemented dashboard uses the six-stage professional pack plus MDA's platform workflow Skill.
 3. Relevant presentation and industry know-how changes requirements and caveats without loading the whole catalog.
 4. Generic guidance has one semantic owner; removed home-grown foundations do not survive as aliases or copied sections.
-5. Generated dashboards remain ordinary exportable source code with no prescribed component, chart, or layout schema.
-6. Critical and high source-owned findings are fixed before completion; unavailable checks are disclosed.
-7. No Skill causes fabricated production data, source capabilities, Tool results, browser tests, Preview state, or publication claims.
+5. When authorized evidence supports multiple distinct questions, generated work defaults to a coordinated dashboard of complementary data components; a single-view result is intentional, not an unexamined default.
+6. Generated dashboards remain ordinary exportable source code with no prescribed component count, chart, or layout schema.
+7. Critical and high source-owned findings are fixed before completion; unavailable checks are disclosed.
+8. No Skill causes fabricated production data, source capabilities, Tool results, browser tests, Preview state, or publication claims.

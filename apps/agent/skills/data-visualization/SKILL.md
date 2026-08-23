@@ -1,6 +1,6 @@
 ---
 name: data-visualization
-description: Selects truthful, decision-appropriate visual encodings for dashboard trends, comparisons, distributions, composition, correlation, flow, geography, tables, and uncertainty. Use after dashboard requirements are approved and whenever charts, metrics, labels, color, or data states are created or reviewed.
+description: Composes complementary dashboard data views and selects truthful, decision-appropriate encodings for trends, comparisons, distributions, composition, correlation, flow, geography, tables, and uncertainty. Use after requirements approval and whenever charts, metrics, component coordination, labels, color, or data states are created or reviewed.
 license: Apache-2.0; see LICENSE.txt
 metadata:
   author: anthropics-knowledge-work-plugins
@@ -11,13 +11,14 @@ metadata:
 Adapted by MDA from anthropics/knowledge-work-plugins at the revision above.
 Changes: converted Python plotting guidance into framework-neutral browser-dashboard
 guidance; retained the upstream chart-selection, accuracy, color, labeling, and
-accessibility principles; added dashboard context, states, tables, and data-quality
-rules formerly owned by MDA's replaced dashboard-data-communication Skill.
+accessibility principles; added purposeful multi-view dashboard composition,
+states, tables, and data-quality rules formerly owned by MDA's replaced
+dashboard-data-communication Skill.
 -->
 
 # Data Visualization
 
-Choose the encoding from the question and evidence, not from fashion or field type. Explain why each selected form is the clearest truthful answer. The choices below are candidates, never a platform chart registry.
+Choose both the dashboard's view portfolio and each encoding from the approved questions and evidence, not from fashion or field type. When evidence supports several distinct questions, prefer a coordinated set of complementary data components over a single visualization. Explain why each selected form is the clearest truthful answer. The choices below are candidates, never a platform component or chart registry.
 
 ## 1. Identify the relationship
 
@@ -36,7 +37,19 @@ Choose the encoding from the question and evidence, not from fashion or field ty
 
 Small multiples often compare many series more honestly than one overloaded chart. Text and annotation may be the best encoding when the main result is a single conclusion with little supporting variation.
 
-## 2. Avoid misleading forms
+## 2. Compose the dashboard
+
+Build the smallest coherent dashboard that supports the approved decision. When the evidence allows, combine complementary information roles instead of making one chart, table, metric, or board carry the whole experience:
+
+- **Orientation:** scope, freshness, current status, and a small number of contextual summaries.
+- **Diagnosis and comparison:** trend, variance, ranking, distribution, composition, flow, geography, or another relationship that explains what differs and why.
+- **Inspection and action:** exact table, list, queue, board, detail, or exception path where users can verify evidence and identify the next step.
+
+These are reasoning roles, not required slots or a fixed component count. One component may serve several roles, and a strong primary view may occupy most of the page. Prefer varied data components when each adds a different analytical relationship, granularity, or precision mode. Reject KPI wallpaper, repeated versions of the same metric, decorative mini-charts, and “chart zoo” diversity that does not change understanding or action. A single-view result is appropriate only when the approved request is intentionally narrow or available evidence truthfully supports one relationship.
+
+Define coordination before implementation: shared time and filter scope, what selection filters or highlights, which context remains fixed, how users reset, and how each affected component communicates loading, stale, partial, empty, and failed data. A filter must not silently update one view while leaving another at an incompatible scope.
+
+## 3. Avoid misleading forms
 
 - Do not use 3D or perspective; it distorts position, length, angle, and area.
 - Prefer bars to pie or donut charts. Consider a pie only for a stable whole with fewer than six clearly distinct parts where approximate proportion—not precise comparison—is the task.
@@ -47,7 +60,7 @@ Small multiples often compare many series more honestly than one overloaded char
 - Keep time intervals proportional; never silently bridge missing periods.
 - Correlation, simultaneity, and attribution are not causation.
 
-## 3. Preserve comparison integrity
+## 4. Preserve comparison integrity
 
 - Compare like with like: definition, entity, population, denominator, unit, currency, timezone, period, aggregation, and precision.
 - Name the baseline: target, prior period, year over year, budget, forecast, benchmark, zero, or control range.
@@ -56,7 +69,7 @@ Small multiples often compare many series more honestly than one overloaded char
 - Keep comparable panels on consistent scales unless the changed scale is unmistakable and justified.
 - State ranking direction and ties. Do not rank sensitive people or institutions without context and legitimate purpose.
 
-## 4. Titles, labels, and numerical context
+## 5. Titles, labels, and numerical context
 
 - Use a conclusion or question title when evidence supports it; use a neutral descriptive title while the result is uncertain.
 - Put date range, filter scope, timezone, source/freshness, and material caveats close to the affected view.
@@ -68,7 +81,7 @@ Small multiples often compare many series more honestly than one overloaded char
 
 Never write a finding that is stronger than the evidence. Fixture values may demonstrate interaction but cannot support production conclusions and must be visibly labeled.
 
-## 5. Color
+## 6. Color
 
 - Use color to encode meaning, not decoration. Keep most structure neutral and reserve emphasis for the primary signal.
 - Use a limited categorical palette; when categories multiply, prefer labels, grouping, filtering, or small multiples over a rainbow.
@@ -77,7 +90,7 @@ Never write a finding that is stronger than the evidence. Fixture values may dem
 - Preserve entity and state color meaning across the page.
 - Never rely on red/green or color alone. Pair color with labels, shape, stroke, pattern, or position.
 
-## 6. Tables and detail
+## 7. Tables and detail
 
 For precise lookup, high-dimensional evidence, operations, and audit trails:
 
@@ -88,13 +101,13 @@ For precise lookup, high-dimensional evidence, operations, and audit trails:
 - Use conditional formatting only for the few values that require attention.
 - Preserve header context on narrow screens; if a table becomes a detail view, do not lose fields required for comparison.
 
-## 7. Uncertainty and data quality
+## 8. Uncertainty and data quality
 
 Show uncertainty when it affects a decision: sample size, confidence or prediction intervals, error range, estimate status, coverage, revision, sampling, and truncation. Mark the forecast boundary. Aggregates can hide subgroup harm or long tails, so expose relevant segments and absolute counts without enabling unsafe re-identification.
 
 Data-dependent views must distinguish loading, refreshing, empty, no filter matches, partial, stale, failed, unauthorized, and normal data. Retain last-known values with a timestamp when appropriate rather than presenting stale data as current or clearing useful evidence.
 
-## 8. Accessibility
+## 9. Accessibility
 
 - Provide an accurate text summary of each important chart's question and key finding.
 - Provide an accessible table or equivalent path when exact values matter.
@@ -107,9 +120,11 @@ Data-dependent views must distinguish loading, refreshing, empty, no filter matc
 
 Before implementation is complete, verify:
 
-1. Every view answers an approved question and its encoding choice can be explained.
-2. Units, periods, baselines, denominators, filters, freshness, and caveats prevent foreseeable misreading.
-3. Scales, areas, color, and ranking do not exaggerate or imply unsupported causality.
-4. Missingness, uncertainty, forecasts, truncation, and fixture status remain visible.
-5. Exact details and accessible alternatives exist where needed.
-6. Removing any view would not make the dashboard clearer; if it would, remove it.
+1. The result reads as a coherent dashboard rather than an isolated visualization or homogeneous card wall when evidence supports multiple approved questions.
+2. Every view answers an approved question, adds a distinct information role, and has an explainable encoding choice.
+3. Shared filters, time scope, selection, refresh, and states remain coordinated across affected components.
+4. Units, periods, baselines, denominators, freshness, and caveats prevent foreseeable misreading.
+5. Scales, areas, color, and ranking do not exaggerate or imply unsupported causality.
+6. Missingness, uncertainty, forecasts, truncation, and fixture status remain visible.
+7. Exact details and accessible alternatives exist where needed.
+8. Removing any view would not make the dashboard clearer; if it would, remove it.
