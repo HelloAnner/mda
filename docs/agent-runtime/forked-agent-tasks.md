@@ -1509,7 +1509,7 @@ The feature is acceptable when:
   validation latency policy.
 - `docs/pi-sdk-dashboard-system-design.md`: Pi Agent Worker, Session, Tool, and
   workspace architecture.
-- `docs/technology-selection-and-architecture.md`: worker pool, Control Plane,
+- `docs/tech.md`: worker pool, Control Plane,
   Redis, PostgreSQL, Object Storage, and deployment boundaries.
 - `docs/domain-driven-design-structure.md`: Agent Work ownership, Job leases,
   fencing, events, and artifact workflows.

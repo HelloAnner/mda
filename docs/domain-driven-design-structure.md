@@ -1493,7 +1493,7 @@ The DDD structure is satisfied when:
 
 ## 23. Related Documents
 
-- `docs/technology-selection-and-architecture.md`: technology, deployment units, and runtime architecture.
+- `docs/tech.md`: technology, deployment units, and runtime architecture.
 - `docs/docker-compose-deployment-architecture.md`: image, PostgreSQL, Redis, network, and secret boundaries.
 - `docs/data-source-management-module.md`: Data Access management and connector contract.
 - `docs/data-gateway-query-contract.md`: Query registration and runtime result contract.
