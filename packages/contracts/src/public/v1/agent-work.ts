@@ -17,6 +17,7 @@ export const AgentJobStateSchema = Type.Union([
 
 export const AgentEventTypeSchema = Type.Union([
   Type.Literal("agent.started"),
+  Type.Literal("agent.progress"),
   Type.Literal("assistant.delta"),
   Type.Literal("assistant.completed"),
   Type.Literal("tool.started"),

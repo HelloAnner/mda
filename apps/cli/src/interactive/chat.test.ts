@@ -15,6 +15,66 @@ test("parses durable Agent SSE events", () => {
   });
 });
 
+test("retries a transient Job read after the event stream completes", async () => {
+  const job: AgentJob = {
+    id: "job_retry",
+    dashboardId: "dashboard_1",
+    sessionId: "session_1",
+    purpose: "edit",
+    state: "running",
+    attemptCount: 1,
+    version: 2,
+    createdAt: "2026-08-21T00:00:00Z",
+    startedAt: "2026-08-21T00:00:01Z",
+  };
+  const event = `id: 1\nevent: assistant.completed\ndata: ${JSON.stringify({
+    sequence: 1,
+    timestamp: "2026-08-21T00:00:02Z",
+    type: "assistant.completed",
+    jobId: job.id,
+    data: { text: "done" },
+  })}\n\n`;
+  let reads = 0;
+  let streams = 0;
+  const originalWrite = process.stdout.write;
+  let output = "";
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    output += String(chunk);
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    const result = await watchJob(
+      { apiUrl: "http://test", version: "0.1.0" },
+      job,
+      async () => {
+        streams += 1;
+        return new Response(event, {
+          headers: { "content-type": "text/event-stream" },
+        });
+      },
+      async () => {
+        reads += 1;
+        if (reads === 1) throw new Error("socket closed");
+        return {
+          ...job,
+          state: "succeeded",
+          version: 3,
+          finishedAt: "2026-08-21T00:00:03Z",
+        };
+      },
+    );
+    expect(result.state).toBe("succeeded");
+    expect({ reads, streams, output }).toEqual({
+      reads: 2,
+      streams: 2,
+      output: "Agent › done\n",
+    });
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+});
+
 test("resumes durable events after an SSE socket failure", async () => {
   const eventQueries: string[] = [];
   let jobReads = 0;

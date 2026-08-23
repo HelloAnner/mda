@@ -69,6 +69,8 @@ This file tracks implementation status. The detailed contracts and architecture 
 - [x] Use an explicit restricted ResourceLoader, platform Skill root, and Coding Tool allowlist.
 - [x] Add the staged Dashboard Skill system: MDA platform boundaries, six reviewed professional workflow Skills, six presentation contexts, and fourteen industry know-how Skills without component or layout constraints.
 - [x] Persist coalesced Agent events and replay them through SSE.
+- [x] Expose content-free model, Tool-input generation, and Pi compaction progress instead of leaving long model phases silent.
+- [x] Bound Query samples, compact context earlier, and guide focused repairs toward targeted edits and one final build.
 - [x] Add continuous `mda chat <dashboard-id>` with the Chinese-by-default Moss role, natural small talk, durable SSE reconnect, and multi-turn Session continuity.
 - [x] Build separate non-root `mda-main:0.1.0` and `mda-agent:0.1.0` images.
 - [x] Deploy PostgreSQL 17.4, Redis 7.4, one Main, and three Agent replicas with eight workers each through Compose.

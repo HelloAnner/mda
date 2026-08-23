@@ -60,11 +60,27 @@ function safeBuildError(error: unknown): string {
     .join("\n");
 }
 
-function textResult(value: unknown): string {
+function textResult(value: unknown, maxChars = 40_000): string {
   const text = JSON.stringify(value, null, 2);
-  return text.length <= 40_000
+  return text.length <= maxChars
     ? text
-    : `${text.slice(0, 40_000)}\n[Tool result truncated]`;
+    : `${text.slice(0, maxChars)}\n[Tool result truncated]`;
+}
+
+export function querySampleResult(value: QueryResult): string {
+  const sampleLimit = 25;
+  return textResult(
+    {
+      rows: value.rows.slice(0, sampleLimit),
+      meta: value.meta,
+      sample: {
+        returnedRows: value.rows.length,
+        includedRows: Math.min(value.rows.length, sampleLimit),
+        omittedRows: Math.max(0, value.rows.length - sampleLimit),
+      },
+    },
+    24_000,
+  );
 }
 
 function dataAccess(input: DashboardToolInput) {
@@ -178,7 +194,7 @@ export function createDashboardTools(
       name: "test_query",
       label: "Test Query",
       description:
-        "Execute one registered immutable Query Revision with typed sample parameters and return bounded current rows plus freshness metadata.",
+        "Execute one registered immutable Query Revision with typed sample parameters and return representative bounded rows plus complete freshness and result metadata.",
       parameters: Type.Object(
         {
           queryId: Type.String({ minLength: 1, maxLength: 200 }),
@@ -193,7 +209,7 @@ export function createDashboardTools(
           parameters: params.parameters,
         });
         return {
-          content: [{ type: "text", text: textResult(value) }],
+          content: [{ type: "text", text: querySampleResult(value) }],
           details: {
             queryId: params.queryId,
             rowCount: value.meta.rowCount,

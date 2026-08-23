@@ -45,11 +45,13 @@ Never fabricate a production field, formula, query, result, freshness time, or l
 ## Implementation loop
 
 1. Translate the approved brief into ordinary source code; no component registry, fixed grid, JSON UI schema, or Skill example is authoritative.
-2. Keep semantic structure, responsive behavior, keyboard paths, and all required data states in the implementation.
-3. Use `dashboard.watch()` for data expected to change while the page remains open unless approved requirements call for manual refresh. Preserve usable previous data and expose refreshing, stale, and failure status.
-4. Keep changes within the approved scope. Do not implement alerts, export, persistence, sharing, publication, or permissions merely because requirements mention a future need.
-5. Run `validate_dashboard` or `build_preview` after source changes. Fix failures and repeat until the Tool succeeds or a real platform/data blocker remains.
-6. Apply the functional-test and audit stages with capabilities that actually exist. A clean build is not a browser test, Lighthouse run, accessibility certification, Preview viewing, or publication.
+2. Preserve good existing work. For a focused change, prefer a targeted `edit` over regenerating a complete existing file. Use `write` for a new file or only when a coherent rewrite is genuinely safer. Split large files by meaningful responsibility when useful, but never impose a mandatory source structure.
+3. Do not reread content immediately after a successful `write` or `edit` unless a later diagnostic requires it. Keep planning and completion prose concise so context remains available for implementation.
+4. Keep semantic structure, responsive behavior, keyboard paths, and all required data states in the implementation.
+5. Use `dashboard.watch()` for data expected to change while the page remains open unless approved requirements call for manual refresh. Preserve usable previous data and expose refreshing, stale, and failure status.
+6. Keep changes within the approved scope. Do not implement alerts, export, persistence, sharing, publication, or permissions merely because requirements mention a future need.
+7. Test a registered Query once while its binding and parameters remain unchanged. Run one final `validate_dashboard` or `build_preview` after the last source change; repeat only after another source mutation or a failed diagnostic.
+8. Apply the functional-test and audit stages with capabilities that actually exist. A clean build is not a browser test, Lighthouse run, accessibility certification, Preview viewing, or publication.
 
 ## Completion report
 

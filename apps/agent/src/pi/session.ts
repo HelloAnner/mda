@@ -262,7 +262,11 @@ export async function runPiSession(
   await restoreWorkspace(paths.workspace, input.workspaceSnapshot);
 
   const settingsManager = SettingsManager.inMemory({
-    compaction: { enabled: true },
+    compaction: {
+      enabled: true,
+      reserveTokens: 32_768,
+      keepRecentTokens: 16_000,
+    },
     retry: { enabled: true, maxRetries: 2 },
   });
   let previewArtifact: DashboardBuildArtifact | undefined;
@@ -291,16 +295,82 @@ export async function runPiSession(
   });
 
   let assistantError: string | undefined;
+  const toolInputProgress = new Map<
+    number,
+    { toolName: string; bytes: number; reportedBytes: number }
+  >();
   const unsubscribe = session.subscribe((event) => {
     if (event.type === "agent_start") {
       input.onEvent("agent.started", {});
-    } else if (
-      event.type === "message_update" &&
-      event.assistantMessageEvent.type === "text_delta"
-    ) {
-      input.onEvent("assistant.delta", {
-        text: event.assistantMessageEvent.delta,
+    } else if (event.type === "turn_start") {
+      input.onEvent("agent.progress", {
+        phase: "model",
+        status: "started",
       });
+    } else if (event.type === "compaction_start") {
+      input.onEvent("agent.progress", {
+        phase: "compaction",
+        status: "started",
+        reason: event.reason,
+      });
+    } else if (event.type === "compaction_end") {
+      input.onEvent("agent.progress", {
+        phase: "compaction",
+        status: event.aborted || event.errorMessage ? "failed" : "completed",
+        reason: event.reason,
+        ...(event.result
+          ? {
+              tokensBefore: event.result.tokensBefore,
+              estimatedTokensAfter: event.result.estimatedTokensAfter,
+            }
+          : {}),
+      });
+    } else if (event.type === "message_update") {
+      const update = event.assistantMessageEvent;
+      if (update.type === "text_delta") {
+        input.onEvent("assistant.delta", { text: update.delta });
+      } else if (update.type === "toolcall_start") {
+        const block = update.partial.content[update.contentIndex];
+        const toolName = block?.type === "toolCall" ? block.name : "tool";
+        toolInputProgress.set(update.contentIndex, {
+          toolName,
+          bytes: 0,
+          reportedBytes: 0,
+        });
+        input.onEvent("agent.progress", {
+          phase: "tool-input",
+          status: "started",
+          toolName,
+          bytes: 0,
+        });
+      } else if (update.type === "toolcall_delta") {
+        const progress = toolInputProgress.get(update.contentIndex);
+        if (progress) {
+          const block = update.partial.content[update.contentIndex];
+          if (block?.type === "toolCall" && block.name) {
+            progress.toolName = block.name;
+          }
+          progress.bytes += Buffer.byteLength(update.delta);
+          if (progress.bytes - progress.reportedBytes >= 16 * 1024) {
+            progress.reportedBytes = progress.bytes;
+            input.onEvent("agent.progress", {
+              phase: "tool-input",
+              status: "streaming",
+              toolName: progress.toolName,
+              bytes: progress.bytes,
+            });
+          }
+        }
+      } else if (update.type === "toolcall_end") {
+        const progress = toolInputProgress.get(update.contentIndex);
+        input.onEvent("agent.progress", {
+          phase: "tool-input",
+          status: "completed",
+          toolName: update.toolCall.name,
+          bytes: progress?.bytes ?? 0,
+        });
+        toolInputProgress.delete(update.contentIndex);
+      }
     } else if (
       event.type === "message_end" &&
       event.message.role === "assistant"
@@ -309,6 +379,7 @@ export async function runPiSession(
         .filter((content) => content.type === "text")
         .map((content) => content.text)
         .join("");
+      toolInputProgress.clear();
       input.onEvent("assistant.completed", {
         text,
         stopReason: event.message.stopReason,

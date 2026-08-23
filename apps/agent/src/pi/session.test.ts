@@ -208,6 +208,10 @@ test("streams a real Pi SDK session through the configured LLM API", async () =>
         ),
       ),
     ).toBe(true);
+    expect(events).toContainEqual({
+      type: "agent.progress",
+      data: { phase: "model", status: "started" },
+    });
     expect(
       events
         .filter(({ type }) => type === "assistant.delta")

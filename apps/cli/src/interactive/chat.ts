@@ -59,6 +59,13 @@ export async function chat(
   }
 }
 
+function formatBytes(value: unknown): string {
+  const bytes = typeof value === "number" && value >= 0 ? value : 0;
+  return bytes < 1024
+    ? `${bytes} B`
+    : `${Math.max(1, Math.round(bytes / 1024))} KiB`;
+}
+
 export async function watchJob(
   config: ApiClientConfig,
   initialJob: AgentJob,
@@ -88,7 +95,35 @@ export async function watchJob(
           const event = parseSseEvent(block);
           if (!event || event.sequence <= cursor) continue;
           cursor = event.sequence;
-          if (event.type === "assistant.delta") {
+          if (event.type === "agent.progress") {
+            const phase = String(event.data.phase ?? "");
+            const status = String(event.data.status ?? "");
+            if (phase === "model" && status === "started") {
+              process.stderr.write("\n  model …\n");
+            } else if (phase === "tool-input") {
+              const toolName = String(event.data.toolName ?? "tool");
+              if (status === "started") {
+                process.stderr.write(`  generating ${toolName} input …\n`);
+              } else if (status === "streaming") {
+                process.stderr.write(
+                  `  generating ${toolName} input ${formatBytes(event.data.bytes)}\n`,
+                );
+              } else if (
+                status === "completed" &&
+                Number(event.data.bytes ?? 0) >= 16 * 1024
+              ) {
+                process.stderr.write(
+                  `  generated ${toolName} input ${formatBytes(event.data.bytes)}\n`,
+                );
+              }
+            } else if (phase === "compaction") {
+              process.stderr.write(
+                status === "started"
+                  ? "\n  compacting Session history …\n"
+                  : `  Session compaction ${status}\n`,
+              );
+            }
+          } else if (event.type === "assistant.delta") {
             if (!printedAssistant) {
               process.stdout.write("Agent › ");
               printedAssistant = true;
@@ -137,10 +172,16 @@ export async function watchJob(
       // Durable events resume from cursor on the next loop.
     }
 
-    const job = await readJob(
-      config,
-      `/api/agent-jobs/${encodeURIComponent(initialJob.id)}`,
-    );
+    let job: unknown;
+    try {
+      job = await readJob(
+        config,
+        `/api/agent-jobs/${encodeURIComponent(initialJob.id)}`,
+      );
+    } catch {
+      await Bun.sleep(250);
+      continue;
+    }
     if (!Value.Check(AgentJobSchema, job)) {
       throw new Error("Control Plane returned invalid Agent Job data");
     }
