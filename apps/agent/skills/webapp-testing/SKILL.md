@@ -10,8 +10,8 @@ metadata:
 <!--
 Adapted by MDA from anthropics/skills at the revision above.
 Changes: retained the upstream Playwright reconnaissance-and-action workflow and
-helpers, added a dashboard state/interaction matrix, and made MDA build/Preview
-capability boundaries and honest reporting explicit.
+helpers, added dashboard and Kanban state/interaction checks, and made MDA
+build/Preview capability boundaries and honest reporting explicit.
 -->
 
 # Web Application Testing
@@ -37,6 +37,7 @@ Read the approved requirements, source, and manifest. Inventory:
 - Global and local filters, defaults, dependent options, clear/reset actions, and preserved scope.
 - Tabs, links, drill paths, expandable regions, modals, menus, and return paths.
 - Sort, search, pagination, selection, export, and row actions that genuinely exist.
+- For Kanban or workflow boards: lane counts and WIP, card ordering and detail return, empty lanes, blocked/aging evidence, intentional board overflow, and move behavior only when persistent mutation actually exists.
 - Loading, refreshing, empty, no-match, partial, stale, error, unauthorized, and normal states.
 - Live regions, focus movement, keyboard order, escape behavior, and non-hover alternatives.
 - Long labels, large and negative values, missing values, many rows/series, and fixture labels.
@@ -66,6 +67,7 @@ For every control:
 - Perform the action by keyboard as well as pointer where applicable.
 - Assert the visible result, current filter scope, related metric/chart/table changes, and reset path.
 - Confirm unrelated state is preserved and focus is not lost.
+- On a board, confirm filtering and refresh keep lane semantics and counts consistent. If moving cards is supported, test valid and invalid transitions, keyboard equivalence, save progress, failure rollback, and conflict behavior; otherwise verify that the UI does not imply write-back.
 - Repeat boundary cases: no matches, a single result, long values, rapid changes, and failed or delayed data when controllable.
 
 Do not merely click controls. An action passes only when the resulting state and data scope are correct.
@@ -78,7 +80,7 @@ Assert that:
 
 - Primary content remains first and readable.
 - The page has no unintended horizontal overflow.
-- Any intentionally scrollable table/chart region is bounded and discoverable.
+- Any intentionally scrollable table, chart, or Kanban region is bounded and discoverable, with lane or header context preserved.
 - Labels do not overlap or disappear.
 - Controls remain reachable, named, and large enough for touch.
 - Hover-only information has another path.

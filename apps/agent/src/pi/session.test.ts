@@ -38,6 +38,7 @@ test("loads the reviewed dashboard Skill catalog without diagnostics", () => {
     "dashboard-executive",
     "dashboard-finance",
     "dashboard-healthcare",
+    "dashboard-kanban",
     "dashboard-manufacturing",
     "dashboard-marketing",
     "dashboard-mobile",
@@ -184,6 +185,7 @@ test("streams a real Pi SDK session through the configured LLM API", async () =>
     expect(JSON.stringify(requestBodies[0])).toContain("webapp-testing");
     expect(JSON.stringify(requestBodies[0])).toContain("web-quality-audit");
     expect(JSON.stringify(requestBodies[0])).toContain("dashboard-executive");
+    expect(JSON.stringify(requestBodies[0])).toContain("dashboard-kanban");
     expect(JSON.stringify(requestBodies[0])).toContain(
       "批准前不得编辑看板源码",
     );

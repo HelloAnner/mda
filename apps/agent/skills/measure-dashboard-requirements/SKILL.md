@@ -10,8 +10,9 @@ metadata:
 <!--
 Adapted by MDA from product-on-purpose/pm-skills at the revision above.
 Changes: tailored the output to MDA's conversational workflow and read-only Data
-Source boundary; delegated chart selection; added state and approval requirements;
-removed references to unrelated PM Skills and unsupported capabilities.
+Source boundary; delegated chart selection; added workflow-board semantics, state,
+and approval requirements; removed references to unrelated PM Skills and
+unsupported capabilities.
 -->
 
 # Dashboard Requirements
@@ -71,6 +72,8 @@ Specify only controls that support a real decision:
 - Loading, refreshing, empty, no-match, partial, stale, error, unauthorized, and normal states.
 - Mobile, keyboard, long-label, large-result, and reduced-motion expectations.
 - Any alert, export, sharing, or persistence need as a requirement—not as an available capability unless a Tool or platform contract confirms it.
+
+For Kanban or workflow-board requests, define the card entity grain, lane semantics, default ordering, WIP and aging rules, blocked/unknown handling, detail path, and expected scan density. Record whether moving an item is only a desired interaction or a confirmed persistent mutation capability; never infer write-back from a visual board request.
 
 ## 5. Data access and privacy
 

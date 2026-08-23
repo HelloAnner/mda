@@ -36,6 +36,7 @@ Chart and component choices are intentionally deferred to `data-visualization` a
 
 - **Global filters and defaults:**
 - **Local interactions / drill paths:**
+- **Workflow / board grain, lanes, order, WIP, and move capability:**
 - **Comparison baseline:**
 - **Reset and preserved context:**
 - **Loading / refreshing:**
@@ -58,6 +59,7 @@ Chart and component choices are intentionally deferred to `data-visualization` a
 Record only requirements already supplied by the user or context. Do not design here.
 
 - **Brand or visual direction:**
+- **Information density / scan target:**
 - **Presentation context:**
 - **Industry cautions:**
 

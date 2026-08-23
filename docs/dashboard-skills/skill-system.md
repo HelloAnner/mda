@@ -41,10 +41,10 @@ The professional pack is vendored under `apps/agent/skills` so the explicit Agen
 
 | Skill | Upstream | Reviewed revision | License | MDA treatment |
 |---|---|---|---|---|
-| `measure-dashboard-requirements` | `product-on-purpose/pm-skills` | `69df49c3eff24b3fa1a29d0bd6a35ae400af4f3e` | Apache-2.0 | Adapted to produce an implementation brief, defer chart choice, respect read-only source context, and avoid fabricated capabilities. |
+| `measure-dashboard-requirements` | `product-on-purpose/pm-skills` | `69df49c3eff24b3fa1a29d0bd6a35ae400af4f3e` | Apache-2.0 | Adapted to produce an implementation brief, defer chart choice, capture workflow-board semantics, respect read-only source context, and avoid fabricated capabilities. |
 | `data-visualization` | `anthropics/knowledge-work-plugins` | `5267cf7bff3031921d4474b8e8f86ad02d2b8f6d` | Apache-2.0 | Adapted from Python-figure guidance to browser dashboards; retains chart-selection, accuracy, color, labeling, and accessibility know-how. |
 | `frontend-design` | `anthropics/skills` | `3b3fad96af16a10759d930941b4520ba0c40edae` | Apache-2.0 | Vendored unchanged. |
-| `webapp-testing` | `anthropics/skills` | `3b3fad96af16a10759d930941b4520ba0c40edae` | Apache-2.0 | Adapted with MDA capability and honesty rules; upstream helper and examples remain bundled for environments with Playwright. |
+| `webapp-testing` | `anthropics/skills` | `3b3fad96af16a10759d930941b4520ba0c40edae` | Apache-2.0 | Adapted with MDA capability, honesty, and Kanban interaction checks; upstream helper and examples remain bundled for environments with Playwright. |
 | `vercel-react-best-practices` | `vercel-labs/agent-skills` | `dd089a8c752c966dee8bf0f27cb625ba193ffd9e` | MIT (declared by the Skill) | Vendored with a React/Vite compatibility preface; detailed rules remain on demand. |
 | `web-quality-audit` | `addyosmani/web-quality-skills` | `95d6e255afe1596b557d7a8498517884438f5b3a` | MIT | Adapted to separate Agent-owned findings from platform-owned headers, hosting, and shell concerns. |
 
@@ -58,7 +58,7 @@ The previous generic Skills were removed rather than retained as aliases:
 - `dashboard-data-communication` was replaced by the MDA-adapted `data-visualization` Skill.
 - `dashboard-coding` remains because its workspace, manifest, approved-dependency, Data Source, Tool, and completion-reporting rules are unique to MDA.
 
-Presentation Skills remain because viewing distance, decision latency, density, and interaction expectations are not covered by the professional foundations. Industry Skills remain because their metric relationships, denominators, segmentations, privacy constraints, and failure modes are domain know-how. Generic visual, chart, React, testing, and audit advice belongs only to the professional Skills.
+Presentation Skills remain because viewing distance, decision latency, density, and interaction expectations are not covered by the professional foundations. `dashboard-kanban` owns workflow-board semantics, scan density, card hierarchy, and responsive lane behavior while leaving visual execution and source structure free. Industry Skills remain because their metric relationships, denominators, segmentations, privacy constraints, and failure modes are domain know-how. Generic visual, chart, React, testing, and audit advice belongs only to the professional Skills.
 
 The stack-specific additions in the research set are intentionally not installed: Streamlit, Vizro, Grafana, Kibana, Retool-style dense UI, and single-file prototype Skills conflict with MDA's fixed React/Vite runtime or impose a presentation niche. They may be reviewed later only if MDA adds the matching runtime or explicit product mode.
 
@@ -69,6 +69,7 @@ Select at most one primary presentation Skill:
 - `dashboard-executive`
 - `dashboard-operations`
 - `dashboard-analytical`
+- `dashboard-kanban`
 - `dashboard-storytelling`
 - `dashboard-wallboard`
 - `dashboard-mobile`
