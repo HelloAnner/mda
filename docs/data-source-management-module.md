@@ -164,40 +164,67 @@ The Control Plane may consume events for display, cache invalidation, and depend
 
 ## 6. Connector Interface
 
-Multiple connector implementations justify one explicit interface:
+Multiple connector implementations justify one explicit port and one registry. Routes, application operations, persistence, Agent Tools, and Dashboard Runtime code must not branch on the Data Source kind.
 
 ```ts
-interface DataSourceConnector<TConfig> {
-  type: "http" | "jdbc";
+type CapabilitySupport = "native" | "emulated" | "unsupported";
 
-  validateConfig(config: unknown): TConfig;
+interface ConnectorCapabilities {
+  schema: "native" | "declared" | "inferred";
+  snapshotRead: "native";
+  incrementalRead: CapabilitySupport;
+  mutations: {
+    insert: CapabilitySupport;
+    update: CapabilitySupport;
+    delete: CapabilitySupport;
+  };
+}
 
-  testConnection(
-    config: TConfig,
-    secrets: ResolvedSecrets,
-    signal: AbortSignal,
-  ): Promise<ConnectionTestResult>;
+interface ConnectorContext {
+  sourceId: string;
+  config: unknown;
+  signal?: AbortSignal;
+}
 
+interface DataSourceConnector {
+  readonly kind: "http" | "jdbc";
+  readonly capabilities: ConnectorCapabilities;
+
+  validateConfig(config: unknown): ConnectorConfig;
+  testConnection(context: ConnectorContext): Promise<ConnectionTestResult>;
   describe(
-    config: TConfig,
-    secrets: ResolvedSecrets,
-    signal: AbortSignal,
+    context: ConnectorContext & { declaredEntities: DataEntity[] },
   ): Promise<ConnectorSchema>;
-
   execute(
-    config: TConfig,
-    secrets: ResolvedSecrets,
-    operation: ConnectorOperation,
-    parameters: QueryParameters,
-    policy: ExecutionPolicy,
-    signal: AbortSignal,
+    context: ConnectorContext & {
+      query: ConnectorQuery;
+      parameters: QueryParameters;
+    },
   ): Promise<ConnectorResult>;
-
-  close?(): Promise<void>;
+  readChanges?(
+    context: ConnectorContext & {
+      query: ConnectorQuery;
+      parameters: QueryParameters;
+      cursor?: string;
+    },
+  ): Promise<ConnectorChangePage>;
+  release?(sourceId: string): Promise<void>;
 }
 ```
 
-The Connector interface returns data and metadata only. It never returns component or visualization recommendations.
+A `ConnectorRegistry` is the only application-level connector dependency. It resolves a connector by kind, validates that stored Config and Query Operations belong to that connector, delegates connection tests, description, execution, and incremental reads, and returns a stable `CONNECTOR_CAPABILITY_UNSUPPORTED` error before invoking an unavailable operation. Connector selection occurs once during service bootstrap; adding a connector must not add conditionals to source lifecycle or query execution code.
+
+Capability values must be truthful:
+
+- `native` means the source provides the semantic directly.
+- `emulated` means the module can preserve the same contract through a documented compatibility strategy.
+- `unsupported` means the operation is rejected; a connector must not fabricate cursors, update times, or deletion events.
+
+Snapshot execution is the common pull primitive. Incremental reads use opaque connector cursors and explicit upsert/delete changes only when supported. Re-running a snapshot query through `dashboard.watch()` is polling, not incremental change capture.
+
+Data Source definition updates, Config Revision activation, schema refresh, disable, and soft deletion are application lifecycle operations. They are not remote data mutations. Schema refresh delegates discovery to `describe`; Config activation, disable, and deletion call `release` so connector resources can be invalidated. Remote insert, update, and delete remain unavailable unless a future connector implements a separately authorized write contract and advertises the matching capabilities.
+
+The Connector interface returns data and metadata only. It never returns component or visualization recommendations. Dashboard code continues to use only the source-neutral `dashboard.query()` and `dashboard.watch()` interface.
 
 ## 7. Data Source Model
 
@@ -516,7 +543,7 @@ interface JdbcSourceConfig {
 }
 ```
 
-`driverId` references an allowlisted driver artifact. It is not an arbitrary JAR URL.
+`driverId` references an allowlisted driver artifact. It is not an arbitrary JAR URL. JDBC URL user information is forbidden; usernames and passwords may come only from the typed secret references.
 
 ### 11.2 Driver Registry
 
@@ -938,6 +965,8 @@ DATA_SOURCE_DELETED
 DATA_SOURCE_UNAVAILABLE
 CONFIG_INVALID
 CONFIG_VERSION_CONFLICT
+CONNECTOR_UNAVAILABLE
+CONNECTOR_CAPABILITY_UNSUPPORTED
 CONNECTION_FAILED
 CONNECTION_NOT_READ_ONLY
 SECRET_NOT_FOUND

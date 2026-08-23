@@ -1,11 +1,52 @@
 import { lookup } from "node:dns/promises";
-import type {
-  HttpDataSourceConfig,
-  HttpQueryOperation,
-  QueryResult,
-  RegisteredQuery,
+import {
+  type HttpDataSourceConfig,
+  HttpDataSourceConfigSchema,
+  type HttpQueryOperation,
+  HttpQueryOperationSchema,
+  type QueryResult,
 } from "@mda/contracts";
-import { resolveSecret } from "./secrets.ts";
+import { Value } from "@sinclair/typebox/value";
+import { resolveSecret } from "../secrets.ts";
+import {
+  type ConnectorQuery,
+  type DataSourceConnector,
+  validateParameters,
+} from "./connector.ts";
+
+function validateBaseUrl(config: HttpDataSourceConfig): URL {
+  let url: URL;
+  try {
+    url = new URL(config.baseUrl);
+  } catch {
+    throw new Error("CONFIG_INVALID: Invalid HTTP base URL");
+  }
+  if (url.username || url.password) {
+    throw new Error("CONFIG_INVALID: URL credentials are forbidden");
+  }
+  if (url.protocol !== "https:" && !config.allowPrivateNetwork) {
+    throw new Error("HTTP_DESTINATION_BLOCKED: HTTPS is required");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("HTTP_DESTINATION_BLOCKED: Unsupported URL protocol");
+  }
+  return url;
+}
+
+function validateConfig(config: unknown): HttpDataSourceConfig {
+  if (!Value.Check(HttpDataSourceConfigSchema, config)) {
+    throw new Error("CONFIG_INVALID: Invalid HTTP connector configuration");
+  }
+  validateBaseUrl(config);
+  return config;
+}
+
+function validateOperation(operation: unknown): HttpQueryOperation {
+  if (!Value.Check(HttpQueryOperationSchema, operation)) {
+    throw new Error("QUERY_INVALID: Invalid HTTP query operation");
+  }
+  return operation;
+}
 
 async function authorization(
   config: HttpDataSourceConfig,
@@ -42,16 +83,7 @@ function privateAddress(address: string): boolean {
 export async function validateDestination(
   config: HttpDataSourceConfig,
 ): Promise<URL> {
-  const url = new URL(config.baseUrl);
-  if (url.username || url.password) {
-    throw new Error("CONFIG_INVALID: URL credentials are forbidden");
-  }
-  if (url.protocol !== "https:" && !config.allowPrivateNetwork) {
-    throw new Error("HTTP_DESTINATION_BLOCKED: HTTPS is required");
-  }
-  if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new Error("HTTP_DESTINATION_BLOCKED: Unsupported URL protocol");
-  }
+  const url = validateBaseUrl(config);
   const addresses = await lookup(url.hostname, { all: true, verbatim: true });
   if (
     !config.allowPrivateNetwork &&
@@ -77,26 +109,18 @@ function resolvePointer(value: unknown, pointer: string): unknown {
     }, value);
 }
 
-function valueMatches(type: string, value: unknown): boolean {
-  if (value === null) return true;
-  if (type === "integer") return Number.isInteger(value);
-  if (type === "number")
-    return typeof value === "number" && Number.isFinite(value);
-  if (type === "boolean") return typeof value === "boolean";
-  return typeof value === "string";
-}
-
 function inferType(
   value: unknown,
 ): "string" | "integer" | "number" | "boolean" | "json" {
   if (typeof value === "boolean") return "boolean";
-  if (typeof value === "number")
+  if (typeof value === "number") {
     return Number.isInteger(value) ? "integer" : "number";
+  }
   if (typeof value === "string") return "string";
   return "json";
 }
 
-export function inferColumns(rows: Array<Record<string, unknown>>) {
+function inferColumns(rows: Array<Record<string, unknown>>) {
   const names = new Set(rows.slice(0, 100).flatMap((row) => Object.keys(row)));
   return [...names].sort().map((name) => {
     const values = rows.slice(0, 100).map((row) => row[name]);
@@ -109,33 +133,17 @@ export function inferColumns(rows: Array<Record<string, unknown>>) {
   });
 }
 
-export async function executeHttpQuery(
+async function execute(
   config: HttpDataSourceConfig,
-  query: Pick<RegisteredQuery, "operation" | "parameters" | "columns">,
+  query: ConnectorQuery,
   parameters: Record<string, string | number | boolean | null>,
+  secretsRoot: string,
   signal?: AbortSignal,
-  secretsRoot = "/run/secrets",
 ): Promise<QueryResult> {
   const started = performance.now();
   const base = await validateDestination(config);
-  const operation = query.operation as HttpQueryOperation;
-  for (const definition of query.parameters) {
-    const value = parameters[definition.name];
-    if (value === undefined && definition.required) {
-      throw new Error(`PARAMETER_INVALID: Missing ${definition.name}`);
-    }
-    if (value !== undefined && !valueMatches(definition.type, value)) {
-      throw new Error(`PARAMETER_INVALID: Invalid ${definition.name}`);
-    }
-  }
-  if (
-    Object.keys(parameters).some(
-      (name) =>
-        !query.parameters.some((definition) => definition.name === name),
-    )
-  ) {
-    throw new Error("PARAMETER_INVALID: Unknown parameter");
-  }
+  const operation = validateOperation(query.operation);
+  validateParameters(query, parameters);
   if (!operation.path.startsWith("/") || operation.path.startsWith("//")) {
     throw new Error("QUERY_INVALID: HTTP path must be relative to the source");
   }
@@ -209,12 +217,15 @@ export async function executeHttpQuery(
   };
 }
 
-export async function testHttpSource(
+async function testConnection(
   config: HttpDataSourceConfig,
-  secretsRoot = "/run/secrets",
+  secretsRoot: string,
+  signal?: AbortSignal,
 ): Promise<{ latencyMs: number }> {
   const started = performance.now();
   const url = await validateDestination(config);
+  const timeout = AbortSignal.timeout(config.timeoutMs);
+  const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   const response = await fetch(url, {
     method: "GET",
     headers: {
@@ -222,9 +233,47 @@ export async function testHttpSource(
       ...(await authorization(config, secretsRoot)),
     },
     redirect: "error",
-    signal: AbortSignal.timeout(config.timeoutMs),
+    signal: requestSignal,
   });
-  if (!response.ok)
+  if (!response.ok) {
     throw new Error(`CONNECTION_FAILED: HTTP ${response.status}`);
+  }
   return { latencyMs: Math.max(0, Math.round(performance.now() - started)) };
+}
+
+export function createHttpConnector(secretsRoot: string): DataSourceConnector {
+  return {
+    kind: "http",
+    capabilities: {
+      schema: "declared",
+      snapshotRead: "native",
+      incrementalRead: "unsupported",
+      mutations: {
+        insert: "unsupported",
+        update: "unsupported",
+        delete: "unsupported",
+      },
+    },
+    validateConfig,
+    testConnection(context) {
+      return testConnection(
+        validateConfig(context.config),
+        secretsRoot,
+        context.signal,
+      );
+    },
+    async describe(context) {
+      await validateDestination(validateConfig(context.config));
+      return { entities: structuredClone(context.declaredEntities) };
+    },
+    execute(context) {
+      return execute(
+        validateConfig(context.config),
+        context.query,
+        context.parameters,
+        secretsRoot,
+        context.signal,
+      );
+    },
+  };
 }

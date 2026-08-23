@@ -9,7 +9,10 @@ import {
 import { Value } from "@sinclair/typebox/value";
 import { SQL } from "bun";
 import { loadDataSourceConfig } from "./config.ts";
-import type { JdbcConnectorConfig } from "./jdbc-connector.ts";
+import {
+  type ConnectorRegistry,
+  createConnectorRegistry,
+} from "./connectors/index.ts";
 import {
   activateSource,
   createSource,
@@ -96,6 +99,7 @@ function errorResponse(error: unknown, requestId: string): Response {
     "PARAMETER_INVALID",
     "QUERY_INVALID",
     "CONFIG_INVALID",
+    "CONNECTOR_CAPABILITY_UNSUPPORTED",
   ].includes(code)
     ? 400
     : code === "HTTP_DESTINATION_BLOCKED"
@@ -123,7 +127,7 @@ function decode(value: string): string {
 export function startDataSourceServer(
   db: SQL,
   internalToken: string,
-  jdbc: JdbcConnectorConfig,
+  connectors: ConnectorRegistry,
   port: number,
   hostname: string,
 ) {
@@ -185,6 +189,7 @@ export function startDataSourceServer(
         if (sourceCollection && request.method === "POST") {
           const result = await createSource(
             db,
+            connectors,
             principal.tenantId,
             principal.actorId,
             principal.requestId,
@@ -210,7 +215,7 @@ export function startDataSourceServer(
           }
           if (action === "description" && request.method === "GET") {
             return Response.json(
-              await describeSource(db, principal.tenantId, id),
+              await describeSource(db, connectors, principal.tenantId, id),
             );
           }
           if (action === "rename" && request.method === "POST") {
@@ -229,6 +234,7 @@ export function startDataSourceServer(
             return Response.json(
               await updateSource(
                 db,
+                connectors,
                 principal.tenantId,
                 principal.actorId,
                 principal.requestId,
@@ -241,7 +247,7 @@ export function startDataSourceServer(
             return Response.json(
               await testSource(
                 db,
-                jdbc,
+                connectors,
                 principal.tenantId,
                 principal.actorId,
                 principal.requestId,
@@ -253,6 +259,7 @@ export function startDataSourceServer(
             return Response.json(
               await activateSource(
                 db,
+                connectors,
                 principal.tenantId,
                 principal.actorId,
                 principal.requestId,
@@ -267,6 +274,7 @@ export function startDataSourceServer(
             return Response.json(
               await transitionSource(
                 db,
+                connectors,
                 principal.tenantId,
                 principal.actorId,
                 principal.requestId,
@@ -279,6 +287,7 @@ export function startDataSourceServer(
             return Response.json(
               await refreshSchema(
                 db,
+                connectors,
                 principal.tenantId,
                 principal.actorId,
                 principal.requestId,
@@ -300,7 +309,7 @@ export function startDataSourceServer(
         if (queryCollection && request.method === "POST") {
           const result = await registerQuery(
             db,
-            jdbc,
+            connectors,
             principal.tenantId,
             principal.actorId,
             principal.requestId,
@@ -329,7 +338,7 @@ export function startDataSourceServer(
             return Response.json(
               await executeQuery(
                 db,
-                jdbc,
+                connectors,
                 principal.tenantId,
                 principal.actorId,
                 id,
@@ -353,11 +362,11 @@ if (import.meta.main) {
   const server = startDataSourceServer(
     db,
     config.internalToken,
-    {
+    createConnectorRegistry({
       runnerUrl: config.jdbcRunnerUrl,
       runnerToken: config.jdbcRunnerToken,
       secretsRoot: config.secretsRoot,
-    },
+    }),
     config.port,
     config.hostname,
   );

@@ -7,24 +7,13 @@ import type {
   DataSourceDescription,
   DataSourceTestResult,
   ExecuteQueryRequest,
-  HttpDataSourceConfig,
-  JdbcDataSourceConfig,
   QueryResult,
   RegisteredQuery,
   RenameDataSourceRequest,
   UpdateDataSourceRequest,
 } from "@mda/contracts";
 import type { SQL } from "bun";
-import {
-  executeHttpQuery,
-  inferColumns,
-  testHttpSource,
-} from "./http-connector.ts";
-import {
-  executeJdbcQuery,
-  type JdbcConnectorConfig,
-  testJdbcSource,
-} from "./jdbc-connector.ts";
+import type { ConnectorRegistry } from "./connectors/connector.ts";
 
 export class DataAccessError extends Error {
   constructor(
@@ -166,12 +155,14 @@ const sourceColumns = `
 
 export async function createSource(
   db: SQL,
+  connectors: ConnectorRegistry,
   tenantId: string,
   actorId: string,
   requestId: string,
   key: string,
   input: CreateDataSourceRequest,
 ): Promise<{ source: DataSource; created: boolean }> {
+  const config = connectors.validateConfig(input.kind, input.config);
   const id = `source_${crypto.randomUUID()}`;
   const now = new Date().toISOString();
   const name = normalizedName(input.name);
@@ -206,7 +197,7 @@ export async function createSource(
       await transaction`
         INSERT INTO data_source_config_revisions (
           source_id, revision, config, entities, state, created_by, created_at
-        ) VALUES (${id}, 1, ${JSON.stringify(input.config)}::jsonb,
+        ) VALUES (${id}, 1, ${JSON.stringify(config)}::jsonb,
           ${JSON.stringify(input.entities ?? [])}::jsonb, 'draft', ${actorId}, ${now})
       `;
       await record(transaction, {
@@ -263,7 +254,7 @@ async function sourceConfig(
   activeOnly = false,
 ): Promise<{
   source: DataSource;
-  config: HttpDataSourceConfig | JdbcDataSourceConfig;
+  config: unknown;
   entities: DataEntity[];
   state: string;
 }> {
@@ -293,12 +284,28 @@ async function sourceConfig(
   };
 }
 
+async function sourceEntities(
+  db: SQL,
+  sourceId: string,
+  schemaRevision: number | undefined,
+  fallback: DataEntity[],
+): Promise<DataEntity[]> {
+  if (!schemaRevision) return fallback;
+  const rows = await db`
+    SELECT entities FROM data_source_schema_revisions
+    WHERE source_id = ${sourceId} AND revision = ${schemaRevision}
+  `;
+  return rows[0] ? json((rows[0] as Row).entities) : fallback;
+}
+
 export async function describeSource(
   db: SQL,
+  connectors: ConnectorRegistry,
   tenantId: string,
   id: string,
 ): Promise<DataSourceDescription> {
   const value = await sourceConfig(db, tenantId, id);
+  connectors.validateConfig(value.source.kind, value.config);
   return {
     source: value.source,
     runtime: {
@@ -306,7 +313,12 @@ export async function describeSource(
       modes: ["query", "poll"],
       minRefreshIntervalMs: 5_000,
     },
-    entities: value.entities,
+    entities: await sourceEntities(
+      db,
+      id,
+      value.source.schemaRevision,
+      value.entities,
+    ),
   };
 }
 
@@ -360,6 +372,7 @@ export async function renameSource(
 
 export async function updateSource(
   db: SQL,
+  connectors: ConnectorRegistry,
   tenantId: string,
   actorId: string,
   requestId: string,
@@ -373,12 +386,16 @@ export async function updateSource(
     }
     const createsRevision = Boolean(input.config || input.entities);
     const revision = existing.source.configRevision + (createsRevision ? 1 : 0);
+    const config = connectors.validateConfig(
+      existing.source.kind,
+      input.config ?? existing.config,
+    );
     if (createsRevision) {
       await transaction`
         INSERT INTO data_source_config_revisions (
           source_id, revision, config, entities, state, created_by, created_at
         ) VALUES (${id}, ${revision},
-          ${JSON.stringify(input.config ?? existing.config)}::jsonb,
+          ${JSON.stringify(config)}::jsonb,
           ${JSON.stringify(input.entities ?? existing.entities)}::jsonb,
           'draft', ${actorId}, now())
       `;
@@ -411,7 +428,7 @@ export async function updateSource(
 
 export async function testSource(
   db: SQL,
-  jdbc: JdbcConnectorConfig,
+  connectors: ConnectorRegistry,
   tenantId: string,
   actorId: string,
   requestId: string,
@@ -420,13 +437,10 @@ export async function testSource(
   const value = await sourceConfig(db, tenantId, id);
   const checkedAt = new Date().toISOString();
   try {
-    const { latencyMs } =
-      value.source.kind === "jdbc"
-        ? await testJdbcSource(jdbc, value.config as JdbcDataSourceConfig)
-        : await testHttpSource(
-            value.config as HttpDataSourceConfig,
-            jdbc.secretsRoot,
-          );
+    const { latencyMs } = await connectors.testConnection(value.source.kind, {
+      sourceId: id,
+      config: value.config,
+    });
     const result: DataSourceTestResult = {
       sourceId: id,
       configRevision: value.source.configRevision,
@@ -480,12 +494,13 @@ export async function testSource(
 
 export async function activateSource(
   db: SQL,
+  connectors: ConnectorRegistry,
   tenantId: string,
   actorId: string,
   requestId: string,
   id: string,
 ): Promise<DataSource> {
-  return db.begin(async (transaction) => {
+  const result = await db.begin(async (transaction) => {
     const rows = await transaction`
       SELECT latest_config_revision FROM data_sources
       WHERE tenant_id = ${tenantId} AND id = ${id} AND status <> 'deleted'
@@ -533,10 +548,13 @@ export async function activateSource(
     });
     return toSource(updated[0] as Row);
   });
+  await connectors.release(result.kind, id);
+  return result;
 }
 
 export async function transitionSource(
   db: SQL,
+  connectors: ConnectorRegistry,
   tenantId: string,
   actorId: string,
   requestId: string,
@@ -549,7 +567,7 @@ export async function transitionSource(
     delete: "deleted",
     restore: "disabled",
   }[action];
-  return db.begin(async (transaction) => {
+  const result = await db.begin(async (transaction) => {
     const rows = await transaction`
       UPDATE data_sources SET status = ${target}, version = version + 1,
         updated_at = now(),
@@ -578,23 +596,33 @@ export async function transitionSource(
     });
     return source;
   });
+  if (action === "disable" || action === "delete") {
+    await connectors.release(result.kind, id);
+  }
+  return result;
 }
 
 export async function refreshSchema(
   db: SQL,
+  connectors: ConnectorRegistry,
   tenantId: string,
   actorId: string,
   requestId: string,
   id: string,
 ): Promise<DataSourceDescription> {
   const value = await sourceConfig(db, tenantId, id, true);
+  const schema = await connectors.describe(value.source.kind, {
+    sourceId: id,
+    config: value.config,
+    declaredEntities: value.entities,
+  });
   const revision = (value.source.schemaRevision ?? 0) + 1;
   await db.begin(async (transaction) => {
     await transaction`
       INSERT INTO data_source_schema_revisions (
         source_id, revision, entities, digest, created_at
-      ) VALUES (${id}, ${revision}, ${JSON.stringify(value.entities)}::jsonb,
-        ${digest(value.entities)}, now())
+      ) VALUES (${id}, ${revision}, ${JSON.stringify(schema.entities)}::jsonb,
+        ${digest(schema.entities)}, now())
     `;
     await transaction`
       UPDATE data_sources SET latest_schema_revision = ${revision},
@@ -610,7 +638,7 @@ export async function refreshSchema(
       data: { schemaRevision: revision },
     });
   });
-  return describeSource(db, tenantId, id);
+  return describeSource(db, connectors, tenantId, id);
 }
 
 async function activeQueryRows(
@@ -634,7 +662,7 @@ async function activeQueryRows(
 
 export async function registerQuery(
   db: SQL,
-  jdbc: JdbcConnectorConfig,
+  connectors: ConnectorRegistry,
   tenantId: string,
   actorId: string,
   requestId: string,
@@ -657,24 +685,13 @@ export async function registerQuery(
     parameters: input.parameters,
     columns: [],
   };
-  const result =
-    source.source.kind === "jdbc"
-      ? await executeJdbcQuery(
-          jdbc,
-          source.config as JdbcDataSourceConfig,
-          preliminary,
-          input.sampleParameters ?? {},
-        )
-      : await executeHttpQuery(
-          source.config as HttpDataSourceConfig,
-          preliminary,
-          input.sampleParameters ?? {},
-          undefined,
-          jdbc.secretsRoot,
-        );
-  const columns = result.meta.columns.length
-    ? result.meta.columns
-    : inferColumns(result.rows);
+  const result = await connectors.execute(source.source.kind, {
+    sourceId: input.sourceId,
+    config: source.config,
+    query: preliminary,
+    parameters: input.sampleParameters ?? {},
+  });
+  const columns = result.meta.columns;
   const id = `query_${crypto.randomUUID()}`;
   const name = normalizedName(input.name);
   const now = new Date().toISOString();
@@ -756,7 +773,7 @@ export async function getQuery(
 
 export async function executeQuery(
   db: SQL,
-  jdbc: JdbcConnectorConfig,
+  connectors: ConnectorRegistry,
   tenantId: string,
   actorId: string,
   id: string,
@@ -788,21 +805,12 @@ export async function executeQuery(
   }
   const started = performance.now();
   try {
-    const result =
-      source.source.kind === "jdbc"
-        ? await executeJdbcQuery(
-            jdbc,
-            source.config as JdbcDataSourceConfig,
-            query,
-            input.parameters,
-          )
-        : await executeHttpQuery(
-            source.config as HttpDataSourceConfig,
-            query,
-            input.parameters,
-            undefined,
-            jdbc.secretsRoot,
-          );
+    const result = await connectors.execute(source.source.kind, {
+      sourceId: query.sourceId,
+      config: source.config,
+      query,
+      parameters: input.parameters,
+    });
     await db`
       INSERT INTO query_execution_audit (
         id, tenant_id, actor_id, query_id, query_revision, row_count,
