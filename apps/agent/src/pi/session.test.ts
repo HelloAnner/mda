@@ -34,11 +34,9 @@ test("loads the reviewed dashboard Skill catalog without diagnostics", () => {
     "dashboard-analytical",
     "dashboard-coding",
     "dashboard-cybersecurity",
-    "dashboard-data-communication",
     "dashboard-ecommerce",
     "dashboard-executive",
     "dashboard-finance",
-    "dashboard-foundations",
     "dashboard-healthcare",
     "dashboard-manufacturing",
     "dashboard-marketing",
@@ -54,11 +52,21 @@ test("loads the reviewed dashboard Skill catalog without diagnostics", () => {
     "dashboard-support",
     "dashboard-sustainability",
     "dashboard-wallboard",
+    "data-visualization",
+    "frontend-design",
+    "measure-dashboard-requirements",
+    "vercel-react-best-practices",
+    "web-quality-audit",
+    "webapp-testing",
   ]);
   expect(mandatoryDashboardSkills).toEqual([
     "dashboard-coding",
-    "dashboard-foundations",
-    "dashboard-data-communication",
+    "measure-dashboard-requirements",
+    "data-visualization",
+    "frontend-design",
+    "vercel-react-best-practices",
+    "webapp-testing",
+    "web-quality-audit",
   ]);
 });
 
@@ -165,13 +173,25 @@ test("streams a real Pi SDK session through the configured LLM API", async () =>
       "你是 Moss，一名专业的看板生成与编程助手",
     );
     expect(JSON.stringify(requestBodies[0])).toContain("dashboard-coding");
-    expect(JSON.stringify(requestBodies[0])).toContain("dashboard-foundations");
     expect(JSON.stringify(requestBodies[0])).toContain(
-      "dashboard-data-communication",
+      "measure-dashboard-requirements",
     );
+    expect(JSON.stringify(requestBodies[0])).toContain("data-visualization");
+    expect(JSON.stringify(requestBodies[0])).toContain("frontend-design");
+    expect(JSON.stringify(requestBodies[0])).toContain(
+      "vercel-react-best-practices",
+    );
+    expect(JSON.stringify(requestBodies[0])).toContain("webapp-testing");
+    expect(JSON.stringify(requestBodies[0])).toContain("web-quality-audit");
     expect(JSON.stringify(requestBodies[0])).toContain("dashboard-executive");
     expect(JSON.stringify(requestBodies[0])).toContain(
+      "批准前不得编辑看板源码",
+    );
+    expect(JSON.stringify(requestBodies[0])).toContain(
       "绝不构成组件目录、图表注册表、固定网格、JSON UI Schema 或文件模板",
+    );
+    expect(JSON.stringify(requestBodies[0])).toContain(
+      "必须在界面和完成说明中清楚标注“样例数据”",
     );
     expect(JSON.stringify(requestBodies[0])).toContain("尚未配置数据源服务");
     expect(JSON.stringify(requestBodies[0])).toContain(

@@ -32,8 +32,12 @@ export type PiModelRuntime = {
 
 export const mandatoryDashboardSkills = [
   "dashboard-coding",
-  "dashboard-foundations",
-  "dashboard-data-communication",
+  "measure-dashboard-requirements",
+  "data-visualization",
+  "frontend-design",
+  "vercel-react-best-practices",
+  "webapp-testing",
+  "web-quality-audit",
 ] as const;
 
 export function loadDashboardSkills(skillsRoot: string) {
@@ -150,9 +154,20 @@ function resourceLoader(
 ${dataSourceSummary}
 
 ## Skill 使用规则
-创建、修改、检查或修复任何看板时，必须先用 read 工具读取这三个基础 Skill：${mandatoryDashboardSkills.join("、")}。然后根据用户目标和数据上下文，通常最多再读取一个匹配的呈现场景 Skill 和一个匹配的行业 Skill；没有明确匹配时只使用基础 Skill，绝不能硬套主题。
+看板工作使用这组必需 Skill：${mandatoryDashboardSkills.join("、")}。必须按阶段渐进读取，而不是一次性把全部内容塞入上下文。
 
-Skill 只指导受众、信息、审美、数据语义、状态和注意事项。它们绝不构成组件目录、图表注册表、固定网格、JSON UI Schema 或文件模板。你仍应自由创建最适合任务的组件、布局和交互。
+新建看板或实质重构时严格遵循以下流程：
+
+1. **需求确认**：先读取 dashboard-coding 与 measure-dashboard-requirements，再根据目标通常最多读取一个匹配的呈现场景 Skill 和一个匹配的行业 Skill。结合当前数据源事实，给出精简的受众、决定、问题、指标公式、数据需求、刷新、筛选、权限、状态与验收标准；明确假设和 TBD。然后停止，等待用户批准，批准前不得编辑看板源码。
+2. **数据表达**：获得当前 Session 的明确批准后，读取 data-visualization。为每个分析关系选择表现形式并说明原因；保证单位、周期、基线、分母、新鲜度、不确定性和可访问替代清楚。
+3. **视觉设计**：读取 frontend-design，先建立与主题相关的色彩、字体、层级、响应式策略和一处克制的标志性细节，再按计划实现，避免通用 AI 模板感。
+4. **React 工程**：使用 React 时读取 vercel-react-best-practices，并只按需读取相关规则。当前是固定 React/Vite 浏览器运行时；不得套用 Next.js、服务端、SWR、第三方脚本或未批准依赖示例。
+5. **功能测试**：完成实现后读取 webapp-testing，按桌面与移动宽度检查筛选、表格、导航、键盘路径以及加载、空、部分、陈旧、错误和正常状态。只有真实浏览器目标与运行器存在时才声称执行了浏览器测试；构建通过不等于功能测试通过。
+6. **质量门**：最后读取 web-quality-audit，修复所有有证据的、源码职责范围内的 Critical 与 High 问题。将平台负责或因缺少 Lighthouse、浏览器、屏幕阅读器、部署地址而无法验证的项目明确分开，绝不能写成已通过。
+
+小范围修改或定点修复可以沿用当前 Session 已批准的需求，无需重新停顿，但仍须读取受影响阶段的 Skill 并重新验证。没有明确匹配时不加载可选场景或行业 Skill，绝不能硬套主题。
+
+任何 Skill 示例都不能覆盖本提示中的工作区、依赖、数据和 Tool 边界。Skill 绝不构成组件目录、图表注册表、固定网格、JSON UI Schema 或文件模板；你仍应自由创建最适合任务的组件、布局和交互。绝不编造生产数据；使用样例或 fixture 时，必须在界面和完成说明中清楚标注“样例数据”，不得暗示它是实时、当前或生产数据。
 
 ## 构建边界
 看板源码只包含 dashboard.manifest.json、src/** 与 public/**。Manifest 必须声明任意位于 src/ 下的 sourceEntry、固定输出 entry: "dist/index.html"、runtimeVersion: "1" 与 queries。每个 Query 声明必须包含真实注册 Query 的 id、revision 和参数类型；页面通过 @mda/dashboard-runtime 的 dashboard.query() 或 dashboard.watch() 获取数据，绝不直接访问源地址。不得创建或修改 package.json、锁文件、Vite 配置、node_modules 或 dist。完成看板源码后必须使用 validate_dashboard 或 build_preview；只有 Tool 成功后才能声称构建、验证或 Preview 成功。
