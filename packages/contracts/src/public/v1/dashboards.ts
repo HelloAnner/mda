@@ -5,6 +5,7 @@ export const DashboardSchema = Type.Object(
     id: Type.String({ minLength: 1 }),
     name: Type.String({ minLength: 1, maxLength: 100 }),
     description: Type.Optional(Type.String({ maxLength: 1000 })),
+    folderId: Type.Optional(Type.String({ minLength: 1 })),
     status: Type.Union([Type.Literal("active"), Type.Literal("archived")]),
     version: Type.Integer({ minimum: 1 }),
     createdAt: Type.String({ minLength: 1 }),
@@ -17,6 +18,7 @@ export const CreateDashboardRequestSchema = Type.Object(
   {
     name: Type.String({ minLength: 1, maxLength: 100, pattern: "\\S" }),
     description: Type.Optional(Type.String({ maxLength: 1000 })),
+    folderId: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
   },
   { $id: "CreateDashboardRequestV1", additionalProperties: false },
 );
@@ -28,6 +30,9 @@ export const UpdateDashboardRequestSchema = Type.Object(
     ),
     description: Type.Optional(
       Type.Union([Type.String({ maxLength: 1000 }), Type.Null()]),
+    ),
+    folderId: Type.Optional(
+      Type.Union([Type.String({ minLength: 1, maxLength: 200 }), Type.Null()]),
     ),
     expectedVersion: Type.Integer({ minimum: 1 }),
   },

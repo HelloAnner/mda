@@ -21,6 +21,7 @@ import {
   readJson,
   requireIdempotencyKey,
 } from "../../shared/http.ts";
+import { getDashboard } from "../dashboards/postgres.ts";
 import {
   checkpointAgentWorkspace,
   loadAgentWorkspace,
@@ -32,9 +33,11 @@ import {
   enqueueAgentJob,
   getAgentJob,
   getAgentJobPrincipal,
+  getAgentSessionTimeline,
   heartbeatAgentJob,
   listAgentEvents,
   listAgentJobs,
+  listAgentSessions,
   settleAgentJob,
   startAgentJob,
 } from "./postgres.ts";
@@ -142,6 +145,12 @@ export async function handleAgentWorkRequest(
   const messageMatch = url.pathname.match(
     /^\/api\/dashboards\/([^/]+)\/messages$/,
   );
+  const sessionCollectionMatch = url.pathname.match(
+    /^\/api\/dashboards\/([^/]+)\/sessions$/,
+  );
+  const sessionTimelineMatch = url.pathname.match(
+    /^\/api\/agent-sessions\/([^/]+)\/timeline$/,
+  );
   const publicJobCollection = url.pathname === "/api/agent-jobs";
   const publicJobMatch = url.pathname.match(
     /^\/api\/agent-jobs\/([^/]+)(?:\/(cancel|events))?$/,
@@ -151,6 +160,8 @@ export async function handleAgentWorkRequest(
   );
   if (
     !messageMatch &&
+    !sessionCollectionMatch &&
+    !sessionTimelineMatch &&
     !publicJobCollection &&
     !publicJobMatch &&
     !internalMatch
@@ -174,6 +185,58 @@ export async function handleAgentWorkRequest(
         requestId,
       );
       return Response.json(result.job, { status: result.created ? 202 : 200 });
+    }
+
+    if (sessionCollectionMatch) {
+      if (request.method !== "GET") {
+        throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method not allowed");
+      }
+      const principal = await dependencies.authenticate(request);
+      requirePermission(principal, "dashboard.read");
+      const dashboardId = decodeId(sessionCollectionMatch[1] ?? "");
+      if (
+        !(await getDashboard(dependencies.db, principal.tenantId, dashboardId))
+      ) {
+        throw new HttpError(404, "DASHBOARD_NOT_FOUND", "Dashboard not found");
+      }
+      const limit = Number(url.searchParams.get("limit") ?? "100");
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+        throw new HttpError(400, "VALIDATION_ERROR", "Invalid limit");
+      }
+      return Response.json({
+        items: await listAgentSessions(
+          dependencies.db,
+          principal.tenantId,
+          dashboardId,
+          limit,
+        ),
+      });
+    }
+
+    if (sessionTimelineMatch) {
+      if (request.method !== "GET") {
+        throw new HttpError(405, "METHOD_NOT_ALLOWED", "Method not allowed");
+      }
+      const principal = await dependencies.authenticate(request);
+      requirePermission(principal, "dashboard.read");
+      const limit = Number(url.searchParams.get("limit") ?? "100");
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+        throw new HttpError(400, "VALIDATION_ERROR", "Invalid limit");
+      }
+      const timeline = await getAgentSessionTimeline(
+        dependencies.db,
+        principal.tenantId,
+        decodeId(sessionTimelineMatch[1] ?? ""),
+        limit,
+      );
+      if (!timeline) {
+        throw new HttpError(
+          404,
+          "AGENT_SESSION_NOT_FOUND",
+          "Agent Session not found",
+        );
+      }
+      return Response.json(timeline);
     }
 
     if (publicJobCollection) {

@@ -31,6 +31,7 @@ export function createDashboard(
     name,
     normalizedName,
     ...(description ? { description } : {}),
+    ...(input.folderId ? { folderId: input.folderId } : {}),
     status: "active",
     version: 1,
     createdAt: timestamp,

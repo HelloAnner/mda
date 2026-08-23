@@ -1,0 +1,9 @@
+{
+  "name": "MDA 智能看板工作台",
+  "short_name": "MDA",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF9F7",
+  "theme_color": "#FAF9F7",
+  "icons": []
+}

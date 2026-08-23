@@ -11,6 +11,9 @@ import {
   CreatePublicationResponseSchema,
   CreateShareLinkResponseSchema,
   type Dashboard,
+  type DashboardFolder,
+  DashboardFolderListResponseSchema,
+  DashboardFolderSchema,
   DashboardListResponseSchema,
   DashboardPreviewSchema,
   type DashboardRevision,
@@ -48,11 +51,16 @@ Commands:
   doctor
   chat <dashboard-id> [--session <session-id>]
   dashboard list [--limit <n>]
-  dashboard create --name <name> [--description <text>] [--idempotency-key <key>]
+  dashboard create --name <name> [--description <text>] [--folder <folder-id>] [--idempotency-key <key>]
   dashboard show <dashboard-id>
-  dashboard update <dashboard-id> [--name <name>] [--description <text>] --expected-version <n>
+  dashboard update <dashboard-id> [--name <name>] [--description <text>] [--folder <folder-id> | --root] --expected-version <n>
   dashboard archive <dashboard-id> --expected-version <n>
   dashboard preview <dashboard-id> [--revision <revision-id>]
+  folder list
+  folder create --name <name> [--parent <folder-id>]
+  folder rename <folder-id> --name <name> --expected-version <n>
+  folder move <folder-id> (--parent <folder-id> | --root) --expected-version <n>
+  folder delete <folder-id> --expected-version <n>
   dashboard save <dashboard-id> [--message <text>]
   dashboard publish <dashboard-id> --revision <revision-id>
   revision list --dashboard <dashboard-id> [--limit <n>]
@@ -140,6 +148,14 @@ function printDashboard(dashboard: Dashboard): void {
   );
 }
 
+function printFolder(folder: DashboardFolder): void {
+  console.log(
+    [folder.id, folder.name, folder.parentId ?? "-", `v${folder.version}`].join(
+      "\t",
+    ),
+  );
+}
+
 function printRevision(revision: DashboardRevision): void {
   console.log(
     [
@@ -187,6 +203,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
         description: { type: "string" },
         expires: { type: "string" },
         "expected-version": { type: "string" },
+        folder: { type: "string" },
         force: { type: "boolean" },
         help: { type: "boolean", short: "h" },
         "idempotency-key": { type: "string" },
@@ -195,8 +212,10 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
         name: { type: "string" },
         output: { type: "string" },
         params: { type: "string" },
+        parent: { type: "string" },
         publication: { type: "string" },
         revision: { type: "string" },
+        root: { type: "boolean" },
         session: { type: "string" },
         source: { type: "string" },
         tenant: { type: "string" },
@@ -264,6 +283,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
   if (
     parsed.positionals[0] !== "dashboard" &&
     parsed.positionals[0] !== "revision" &&
+    parsed.positionals[0] !== "folder" &&
     parsed.positionals[0] !== "publication" &&
     parsed.positionals[0] !== "share" &&
     parsed.positionals[0] !== "source" &&
@@ -298,6 +318,110 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
     }
 
     const action = parsed.positionals[1];
+    if (parsed.positionals[0] === "folder") {
+      if (action === "list" && parsed.positionals.length === 2) {
+        const body = await apiRequest(config, "/api/dashboard-folders");
+        if (!Value.Check(DashboardFolderListResponseSchema, body)) {
+          throw new Error("Control Plane returned invalid Folder data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else body.items.forEach(printFolder);
+        return 0;
+      }
+
+      if (action === "create" && parsed.positionals.length === 2) {
+        const name = stringValue(parsed.values.name);
+        if (!name) {
+          console.error("folder create requires --name");
+          return 2;
+        }
+        const body = await apiRequest(config, "/api/dashboard-folders", {
+          method: "POST",
+          headers: {
+            "idempotency-key":
+              stringValue(parsed.values["idempotency-key"]) ??
+              crypto.randomUUID(),
+          },
+          body: JSON.stringify({
+            name,
+            ...(stringValue(parsed.values.parent)
+              ? { parentId: stringValue(parsed.values.parent) }
+              : {}),
+          }),
+        });
+        if (!Value.Check(DashboardFolderSchema, body)) {
+          throw new Error("Control Plane returned invalid Folder data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else printFolder(body);
+        return 0;
+      }
+
+      if (
+        ["rename", "move", "delete"].includes(action ?? "") &&
+        parsed.positionals.length === 3
+      ) {
+        const expectedVersion = Number(
+          stringValue(parsed.values["expected-version"]),
+        );
+        if (!Number.isInteger(expectedVersion) || expectedVersion < 1) {
+          console.error(`folder ${action} requires --expected-version`);
+          return 2;
+        }
+        const folderId = encodeURIComponent(parsed.positionals[2] ?? "");
+        if (action === "delete") {
+          await apiFetch(config, `/api/dashboard-folders/${folderId}`, {
+            method: "DELETE",
+            body: JSON.stringify({ expectedVersion }),
+          });
+          if (output === "json") {
+            console.log(
+              JSON.stringify({ id: parsed.positionals[2], deleted: true }),
+            );
+          } else console.log(`${parsed.positionals[2]}\tdeleted`);
+          return 0;
+        }
+        const name = stringValue(parsed.values.name);
+        const parentId = stringValue(parsed.values.parent);
+        const root = parsed.values.root === true;
+        if (action === "rename" && !name) {
+          console.error("folder rename requires --name");
+          return 2;
+        }
+        if (action === "move" && Boolean(parentId) === root) {
+          console.error(
+            "folder move requires exactly one of --parent or --root",
+          );
+          return 2;
+        }
+        const body = await apiRequest(
+          config,
+          `/api/dashboard-folders/${folderId}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              expectedVersion,
+              ...(action === "rename" ? { name } : {}),
+              ...(action === "move"
+                ? { parentId: root ? null : parentId }
+                : {}),
+            }),
+          },
+        );
+        if (!Value.Check(DashboardFolderSchema, body)) {
+          throw new Error("Control Plane returned invalid Folder data");
+        }
+        if (output === "json") console.log(JSON.stringify(body));
+        else printFolder(body);
+        return 0;
+      }
+
+      console.error(
+        `Unknown folder command: ${parsed.positionals.slice(1).join(" ")}`,
+      );
+      return 2;
+    }
+
     if (parsed.positionals[0] === "revision") {
       if (action === "list" && parsed.positionals.length === 2) {
         const dashboardId = stringValue(parsed.values.dashboard);
@@ -949,6 +1073,9 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
           ...(stringValue(parsed.values.description)
             ? { description: stringValue(parsed.values.description) }
             : {}),
+          ...(stringValue(parsed.values.folder)
+            ? { folderId: stringValue(parsed.values.folder) }
+            : {}),
         }),
       });
       if (!Value.Check(DashboardSchema, body)) {
@@ -970,6 +1097,16 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
         console.error(`dashboard ${action} requires --expected-version`);
         return 2;
       }
+      if (
+        action === "update" &&
+        parsed.values.root === true &&
+        stringValue(parsed.values.folder)
+      ) {
+        console.error(
+          "dashboard update accepts only one of --folder or --root",
+        );
+        return 2;
+      }
       const body = await apiRequest(
         config,
         `/api/dashboards/${encodeURIComponent(parsed.positionals[2] ?? "")}${action === "archive" ? "/archive" : ""}`,
@@ -983,6 +1120,12 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
             ...(action === "update" &&
             stringValue(parsed.values.description) !== undefined
               ? { description: stringValue(parsed.values.description) }
+              : {}),
+            ...(action === "update" && stringValue(parsed.values.folder)
+              ? { folderId: stringValue(parsed.values.folder) }
+              : {}),
+            ...(action === "update" && parsed.values.root === true
+              ? { folderId: null }
               : {}),
           }),
         },

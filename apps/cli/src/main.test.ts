@@ -380,3 +380,56 @@ test("dashboard create sends tenant auth and renders the result", async () => {
     server.stop(true);
   }
 });
+
+test("folder create sends an additive directory request", async () => {
+  let received: Request | undefined;
+  let receivedBody: unknown;
+  const folder = {
+    id: "folder_1",
+    name: "Executive",
+    parentId: "folder_root",
+    version: 1,
+    createdAt: "2026-08-23T00:00:00.000Z",
+    updatedAt: "2026-08-23T00:00:00.000Z",
+  };
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      received = request;
+      receivedBody = await request.json();
+      return Response.json(folder, { status: 201 });
+    },
+  });
+
+  try {
+    const subprocess = Bun.spawn(
+      [
+        process.execPath,
+        new URL("./main.ts", import.meta.url).pathname,
+        "--api-url",
+        `http://127.0.0.1:${server.port}`,
+        "folder",
+        "create",
+        "--name",
+        "Executive",
+        "--parent",
+        "folder_root",
+      ],
+      { stderr: "pipe", stdout: "pipe" },
+    );
+    expect(await subprocess.exited).toBe(0);
+    expect(await new Response(subprocess.stdout).text()).toContain(
+      "folder_1\tExecutive\tfolder_root\tv1",
+    );
+    expect(await new Response(subprocess.stderr).text()).toBe("");
+    expect(received?.url).toEndWith("/api/dashboard-folders");
+    expect(received?.headers.get("idempotency-key")).toBeTruthy();
+    expect(receivedBody).toEqual({
+      name: "Executive",
+      parentId: "folder_root",
+    });
+  } finally {
+    server.stop(true);
+  }
+});

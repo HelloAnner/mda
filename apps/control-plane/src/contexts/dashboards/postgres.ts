@@ -20,6 +20,7 @@ function toDashboard(row: Row): Dashboard {
     ...(row.description === null || row.description === undefined
       ? {}
       : { description: String(row.description) }),
+    ...(row.folder_id ? { folderId: String(row.folder_id) } : {}),
     status: row.status as Dashboard["status"],
     version: Number(row.version),
     createdAt: new Date(String(row.created_at)).toISOString(),
@@ -43,6 +44,20 @@ export async function insertDashboard(
 
   try {
     return await db.begin(async (transaction) => {
+      if (dashboard.folderId) {
+        const folders = await transaction`
+          SELECT 1 FROM dashboard_folders
+          WHERE tenant_id = ${principal.tenantId}
+            AND id = ${dashboard.folderId}
+        `;
+        if (folders.length === 0) {
+          throw new HttpError(
+            404,
+            "DASHBOARD_FOLDER_NOT_FOUND",
+            "Dashboard Folder not found",
+          );
+        }
+      }
       const existingResultId = await claimIdempotency(transaction, {
         tenantId: principal.tenantId,
         operation,
@@ -53,7 +68,8 @@ export async function insertDashboard(
 
       if (existingResultId) {
         const existingDashboards = await transaction`
-          SELECT id, name, description, status, version, created_at, updated_at
+          SELECT id, name, description, folder_id, status, version,
+            created_at, updated_at
           FROM dashboards
           WHERE tenant_id = ${principal.tenantId}
             AND id = ${existingResultId}
@@ -66,15 +82,17 @@ export async function insertDashboard(
 
       const insertedDashboards = await transaction`
         INSERT INTO dashboards (
-          id, tenant_id, name, normalized_name, description, status,
-          version, created_by, created_at, updated_at
+          id, tenant_id, name, normalized_name, description, folder_id,
+          status, version, created_by, created_at, updated_at
         ) VALUES (
           ${dashboard.id}, ${dashboard.tenantId}, ${dashboard.name},
           ${dashboard.normalizedName}, ${dashboard.description ?? null},
-          ${dashboard.status}, ${dashboard.version}, ${dashboard.createdBy},
-          ${dashboard.createdAt}, ${dashboard.updatedAt}
+          ${dashboard.folderId ?? null}, ${dashboard.status},
+          ${dashboard.version}, ${dashboard.createdBy}, ${dashboard.createdAt},
+          ${dashboard.updatedAt}
         )
-        RETURNING id, name, description, status, version, created_at, updated_at
+        RETURNING id, name, description, folder_id, status, version,
+          created_at, updated_at
       `;
       const insertedDashboard = insertedDashboards[0] as Row | undefined;
       if (!insertedDashboard)
@@ -141,8 +159,8 @@ export async function updateDashboard(
   try {
     return await db.begin(async (transaction) => {
       const current = await transaction`
-        SELECT id, name, normalized_name, description, status, version,
-          created_at, updated_at
+        SELECT id, name, normalized_name, description, folder_id, status,
+          version, created_at, updated_at
         FROM dashboards
         WHERE tenant_id = ${tenantId} AND id = ${id}
         FOR UPDATE
@@ -169,16 +187,36 @@ export async function updateDashboard(
         update?.description === undefined
           ? row.description
           : update.description?.trim() || null;
+      const folderId =
+        update?.folderId === undefined
+          ? row.folder_id
+            ? String(row.folder_id)
+            : undefined
+          : (update.folderId ?? undefined);
+      if (folderId) {
+        const folders = await transaction`
+          SELECT 1 FROM dashboard_folders
+          WHERE tenant_id = ${tenantId} AND id = ${folderId}
+        `;
+        if (folders.length === 0) {
+          throw new HttpError(
+            404,
+            "DASHBOARD_FOLDER_NOT_FOUND",
+            "Dashboard Folder not found",
+          );
+        }
+      }
       const now = new Date().toISOString();
       const updated = await transaction`
         UPDATE dashboards
         SET name = ${name.name}, normalized_name = ${name.normalizedName},
-          description = ${description ?? null},
+          description = ${description ?? null}, folder_id = ${folderId ?? null},
           status = ${archive ? "archived" : "active"},
           version = version + 1, updated_at = ${now}
         WHERE tenant_id = ${tenantId} AND id = ${id}
           AND version = ${input.expectedVersion}
-        RETURNING id, name, description, status, version, created_at, updated_at
+        RETURNING id, name, description, folder_id, status, version,
+          created_at, updated_at
       `;
       const dashboard = toDashboard(updated[0] as Row);
       const action = archive
@@ -186,7 +224,11 @@ export async function updateDashboard(
         : "dashboard.metadata-updated";
       const data = archive
         ? {}
-        : { name: dashboard.name, description: dashboard.description ?? null };
+        : {
+            name: dashboard.name,
+            description: dashboard.description ?? null,
+            folderId: dashboard.folderId ?? null,
+          };
       await transaction`
         INSERT INTO control_outbox (
           id, tenant_id, event_type, aggregate_id, payload, occurred_at
@@ -224,7 +266,8 @@ export async function listDashboards(
   limit: number,
 ): Promise<Dashboard[]> {
   const rows = await db`
-    SELECT id, name, description, status, version, created_at, updated_at
+    SELECT id, name, description, folder_id, status, version,
+      created_at, updated_at
     FROM dashboards
     WHERE tenant_id = ${tenantId}
     ORDER BY updated_at DESC, id DESC
@@ -239,7 +282,8 @@ export async function getDashboard(
   id: string,
 ): Promise<Dashboard | undefined> {
   const rows = await db`
-    SELECT id, name, description, status, version, created_at, updated_at
+    SELECT id, name, description, folder_id, status, version,
+      created_at, updated_at
     FROM dashboards
     WHERE tenant_id = ${tenantId} AND id = ${id}
     LIMIT 1

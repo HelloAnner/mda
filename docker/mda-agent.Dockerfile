@@ -5,6 +5,7 @@ COPY apps/agent/package.json apps/agent/package.json
 COPY apps/cli/package.json apps/cli/package.json
 COPY apps/control-plane/package.json apps/control-plane/package.json
 COPY apps/data-source-service/package.json apps/data-source-service/package.json
+COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/dashboard-runtime/package.json packages/dashboard-runtime/package.json
 COPY packages/dashboard-template/package.json packages/dashboard-template/package.json

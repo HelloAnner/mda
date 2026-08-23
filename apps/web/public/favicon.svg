@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>MDA</title>
+  <rect width="32" height="32" rx="8" fill="#18181B"/>
+  <path d="M8 21V11h3.2l4.8 6.4 4.8-6.4H24v10h-3v-5.6L16 22l-5-6.6V21H8Z" fill="#FAF9F7"/>
+  <circle cx="25" cy="7" r="3" fill="#DE6A43"/>
+</svg>

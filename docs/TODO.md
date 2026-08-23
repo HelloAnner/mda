@@ -1,6 +1,6 @@
 # MDA Implementation TODO
 
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 This file tracks implementation status. The detailed contracts and architecture in `docs/` remain the source of truth.
 
@@ -117,6 +117,16 @@ This file tracks implementation status. The detailed contracts and architecture 
 - [x] Add Share create, list, show, and revoke CLI flows.
 - [x] Verify direct delivery, token tampering, digest-only storage, idempotency, and immediate revocation against `moss-dev-2`.
 
+### Management Web workspace
+
+- [x] Add the self-hosted React workspace with exact Moss source tokens, fonts, conversation geometry, reasoning timeline, composer, inset Board drawer, Revision file drawer, and light/dark themes.
+- [x] Add tenant-scoped nested Dashboard folders plus browser and CLI create, rename, move, list, and empty-folder delete flows.
+- [x] Expose persisted Agent Session summaries and sanitized conversation timelines so web and CLI-created conversations restore in the browser.
+- [x] Connect Dashboard metadata/archive, multi-turn chat/SSE/cancellation, Preview, Revision, Publication, Share Link, Data Source, Query, and Job APIs.
+- [x] Add automatic Board build masks, Preview rendering, save-to-directory motion, refresh, full-screen, publish/share, revocation, file preview, and artifact downloads.
+- [x] Build and serve cache-safe hashed web assets from `mda-main` with strict CSP and self-hosted Inter, JetBrains Mono, and Noto Sans SC.
+- [x] Verify the complete browser flow against the deployed server with isolated folders, Dashboards, Agent turns, Preview, save, publish/share, Sources, Queries, Jobs, both themes, screenshots, and clean browser/server logs.
+
 ### HTTP Data Access and live Runtime
 
 - [x] Add the independently deployed Bun Data Source Service, owned migrations, private API, audit, and events.
@@ -142,7 +152,7 @@ Continue the backend distribution and data path:
 
 ### Foundation and boundaries
 
-- [ ] Management Web workspace and React/Vite application.
+- [x] Management Web workspace and React/Vite application.
 - [x] Data Source Service workspace and runnable service.
 - [x] Separate non-root Main and Agent images with read-only container filesystems and dropped capabilities.
 - [x] Fixed Dashboard Template and live public query/watch Runtime package.
@@ -202,7 +212,7 @@ Continue the backend distribution and data path:
 - [ ] Complete combined export; validation, Preview, save, publication, source Revision export, and Publication bundle export now work.
 - [x] HTTP Source and first immutable Query management commands.
 - [ ] Simulation, audit, completion, and full deployment diagnostics.
-- [ ] Management Web screens for the same Control Plane capabilities.
+- [x] Management Web screens for the same implemented Control Plane capabilities.
 
 ### Deployment and hardening
 
@@ -225,6 +235,8 @@ bun run lint
 bun test
 docker compose --env-file .env.local up -d --build --scale agent=3
 mda doctor
+mda folder list
+mda folder create --name "Executive"
 mda chat <dashboard-id>
 mda dashboard preview <dashboard-id> [--revision <revision-id>]
 mda dashboard save <dashboard-id> --message "First Revision"
@@ -242,6 +254,8 @@ mda revision files <revision-id>
 mda revision export <revision-id> --output dashboard-source.tar.gz
 
 bun run dev
+bun run web
+bun run web:build
 bun run agent
 bun run mda --help
 bun run mda doctor

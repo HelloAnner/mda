@@ -10,6 +10,7 @@ import { DataSourceClient } from "./adapters/data-source-client.ts";
 import { loadConfig } from "./config.ts";
 import { startAgentJobDispatcher } from "./contexts/agent-work/dispatch.ts";
 import { handleAgentWorkRequest } from "./contexts/agent-work/routes.ts";
+import { handleDashboardFolderRequest } from "./contexts/dashboard-folders/routes.ts";
 import { handleDashboardRequest } from "./contexts/dashboards/routes.ts";
 import { handleAgentDataRequest } from "./contexts/data-access/agent-routes.ts";
 import { handleDataAccessRequest } from "./contexts/data-access/routes.ts";
@@ -52,6 +53,44 @@ interface ServerDependencies {
   previewTtlSeconds?: number;
   shareSigningKey?: string;
   dataSources?: DataSourceClient;
+  webRoot?: string;
+}
+
+const defaultWebRoot = new URL("../../web/dist/", import.meta.url).pathname;
+const webHeaders = {
+  "content-security-policy":
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+  "cross-origin-opener-policy": "same-origin",
+  "referrer-policy": "no-referrer",
+  "x-content-type-options": "nosniff",
+};
+
+async function serveWebAsset(
+  request: Request,
+  root: string,
+): Promise<Response | undefined> {
+  if (request.method !== "GET" && request.method !== "HEAD") return undefined;
+  const pathname = new URL(request.url).pathname;
+  const relative =
+    pathname === "/"
+      ? "index.html"
+      : /^\/(?:assets\/[A-Za-z0-9._-]+|fonts\/[A-Za-z0-9._/-]+|favicon\.svg|manifest\.webmanifest)$/.test(
+            pathname,
+          ) && !pathname.includes("..")
+        ? pathname.slice(1)
+        : undefined;
+  if (!relative) return undefined;
+  const file = Bun.file(`${root.replace(/\/$/, "")}/${relative}`);
+  if (!(await file.exists())) return undefined;
+  const headers = new Headers(webHeaders);
+  headers.set(
+    "cache-control",
+    relative === "index.html"
+      ? "no-cache"
+      : "public, max-age=31536000, immutable",
+  );
+  if (file.type) headers.set("content-type", file.type);
+  return new Response(request.method === "HEAD" ? null : file, { headers });
 }
 
 export function startServer(
@@ -94,6 +133,11 @@ export function startServer(
       },
     },
     async fetch(request) {
+      const webResponse = await serveWebAsset(
+        request,
+        dependencies?.webRoot ?? Bun.env.MDA_WEB_ROOT ?? defaultWebRoot,
+      );
+      if (webResponse) return webResponse;
       if (dependencies) {
         if (
           dependencies.accessPassword &&
@@ -140,6 +184,11 @@ export function startServer(
           dependencies,
         );
         if (revisionResponse) return revisionResponse;
+        const folderResponse = await handleDashboardFolderRequest(
+          request,
+          dependencies,
+        );
+        if (folderResponse) return folderResponse;
         const dashboardResponse = await handleDashboardRequest(
           request,
           dependencies,

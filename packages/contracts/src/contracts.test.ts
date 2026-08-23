@@ -2,7 +2,10 @@ import { expect, test } from "bun:test";
 import { Value } from "@sinclair/typebox/value";
 import {
   AgentDataSourceContextSchema,
+  AgentSessionTimelineSchema,
   ApiErrorSchema,
+  CreateDashboardFolderRequestSchema,
+  DashboardFolderSchema,
   ServiceMetadataSchema,
 } from "./index.ts";
 
@@ -44,6 +47,38 @@ test("Agent Data Source summaries reject credentials", () => {
       items: [{ ...context.items[0], password: "must-not-cross" }],
     }),
   ).toBe(false);
+});
+
+test("Dashboard Folder and conversation read contracts stay additive", () => {
+  expect(
+    Value.Check(DashboardFolderSchema, {
+      id: "folder_1",
+      name: "经营看板",
+      version: 1,
+      createdAt: "2026-08-23T00:00:00.000Z",
+      updatedAt: "2026-08-23T00:00:00.000Z",
+    }),
+  ).toBe(true);
+  expect(
+    Value.Check(CreateDashboardFolderRequestSchema, {
+      name: "区域看板",
+      parentId: "folder_1",
+    }),
+  ).toBe(true);
+  expect(
+    Value.Check(AgentSessionTimelineSchema, {
+      session: {
+        id: "session_1",
+        dashboardId: "dashboard_1",
+        status: "open",
+        version: 1,
+        createdAt: "2026-08-23T00:00:00.000Z",
+        updatedAt: "2026-08-23T00:00:00.000Z",
+      },
+      turns: [],
+      truncated: false,
+    }),
+  ).toBe(true);
 });
 
 test("API errors require safe client fields", () => {

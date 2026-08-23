@@ -318,6 +318,39 @@ integrationTest("enqueues and fences authoritative Agent work", async () => {
   });
   expect(await stream.text()).toContain('"text":"hello"');
 
+  const sessions = await fetch(
+    `${baseUrl}/api/dashboards/dashboard_agent/sessions`,
+    { headers: authorizedHeaders() },
+  );
+  const sessionItems = (await sessions.json()).items;
+  expect(sessionItems).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: queued.sessionId,
+        title: "Build a sales dashboard",
+        jobCount: 1,
+      }),
+    ]),
+  );
+  const timeline = await fetch(
+    `${baseUrl}/api/agent-sessions/${queued.sessionId}/timeline`,
+    { headers: authorizedHeaders() },
+  );
+  const timelineBody = await timeline.json();
+  expect(timelineBody).toMatchObject({
+    session: { id: queued.sessionId },
+    truncated: false,
+  });
+  expect(timelineBody.turns[0]).toMatchObject({
+    job: { id: queued.id },
+    message: "Build a sales dashboard",
+  });
+  expect(timelineBody.turns[0].events).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ type: "assistant.delta" }),
+    ]),
+  );
+
   const [{ count }] = await db`
     SELECT count(*)::int AS count
     FROM control_outbox
@@ -394,3 +427,85 @@ integrationTest(
     expect((await duplicate.json()).code).toBe("DASHBOARD_NAME_CONFLICT");
   },
 );
+
+integrationTest("organizes Dashboards in nested user folders", async () => {
+  const createFolder = async (name: string, parentId?: string) => {
+    const response = await fetch(`${baseUrl}/api/dashboard-folders`, {
+      method: "POST",
+      headers: authorizedHeaders({
+        "content-type": "application/json",
+        "idempotency-key": `folder:${name}`,
+      }),
+      body: JSON.stringify({ name, ...(parentId ? { parentId } : {}) }),
+    });
+    expect(response.status).toBe(201);
+    return response.json();
+  };
+  const parent = await createFolder("Integration Boards");
+  const child = await createFolder("Executive", parent.id);
+  const dashboardResponse = await fetch(`${baseUrl}/api/dashboards`, {
+    method: "POST",
+    headers: authorizedHeaders({
+      "content-type": "application/json",
+      "idempotency-key": "folder-dashboard-create",
+    }),
+    body: JSON.stringify({
+      name: "Folder Integration Dashboard",
+      folderId: child.id,
+    }),
+  });
+  expect(dashboardResponse.status).toBe(201);
+  const dashboard = await dashboardResponse.json();
+  expect(dashboard.folderId).toBe(child.id);
+
+  const folders = await fetch(`${baseUrl}/api/dashboard-folders`, {
+    headers: authorizedHeaders(),
+  });
+  expect((await folders.json()).items).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: parent.id, name: parent.name }),
+      expect.objectContaining({ id: child.id, parentId: parent.id }),
+    ]),
+  );
+
+  const cycle = await fetch(`${baseUrl}/api/dashboard-folders/${parent.id}`, {
+    method: "PATCH",
+    headers: authorizedHeaders({ "content-type": "application/json" }),
+    body: JSON.stringify({
+      parentId: child.id,
+      expectedVersion: parent.version,
+    }),
+  });
+  expect(cycle.status).toBe(409);
+  expect((await cycle.json()).code).toBe("DASHBOARD_FOLDER_CYCLE");
+
+  const occupied = await fetch(`${baseUrl}/api/dashboard-folders/${child.id}`, {
+    method: "DELETE",
+    headers: authorizedHeaders({ "content-type": "application/json" }),
+    body: JSON.stringify({ expectedVersion: child.version }),
+  });
+  expect(occupied.status).toBe(409);
+  expect((await occupied.json()).code).toBe("DASHBOARD_FOLDER_NOT_EMPTY");
+
+  const moved = await fetch(`${baseUrl}/api/dashboards/${dashboard.id}`, {
+    method: "PATCH",
+    headers: authorizedHeaders({ "content-type": "application/json" }),
+    body: JSON.stringify({
+      folderId: null,
+      expectedVersion: dashboard.version,
+    }),
+  });
+  expect((await moved.json()).folderId).toBeUndefined();
+
+  for (const folder of [child, parent]) {
+    const deleted = await fetch(
+      `${baseUrl}/api/dashboard-folders/${folder.id}`,
+      {
+        method: "DELETE",
+        headers: authorizedHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ expectedVersion: folder.version }),
+      },
+    );
+    expect(deleted.status).toBe(204);
+  }
+});

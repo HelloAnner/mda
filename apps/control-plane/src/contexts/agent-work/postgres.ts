@@ -2,6 +2,9 @@ import type {
   AgentEvent,
   AgentJob,
   AgentLeaseCommand,
+  AgentSession,
+  AgentSessionSummary,
+  AgentSessionTimeline,
   AppendAgentEventsRequest,
   ClaimedAgentJob,
   CreateAgentJobRequest,
@@ -239,6 +242,13 @@ export async function enqueueAgentJob(
       `;
       const row = inserted[0] as Row | undefined;
       if (!row) throw new Error("Agent Job insert returned no row");
+      if (input.sessionId) {
+        await transaction`
+          UPDATE agent_sessions
+          SET version = version + 1, updated_at = ${timestamp}
+          WHERE tenant_id = ${principal.tenantId} AND id = ${sessionId}
+        `;
+      }
       const job = toAgentJob(row);
       const event = {
         id: `event_${crypto.randomUUID()}`,
@@ -776,6 +786,110 @@ export async function appendAgentEvents(
   } catch (error) {
     transitionError(error);
   }
+}
+
+function toAgentSession(row: Row): AgentSession {
+  return {
+    id: String(row.id),
+    dashboardId: String(row.dashboard_id),
+    status: row.status as AgentSession["status"],
+    version: Number(row.version),
+    createdAt: new Date(String(row.created_at)).toISOString(),
+    updatedAt: new Date(String(row.updated_at)).toISOString(),
+  };
+}
+
+export async function listAgentSessions(
+  db: SQL,
+  tenantId: string,
+  dashboardId: string,
+  limit: number,
+): Promise<AgentSessionSummary[]> {
+  const rows = await db`
+    SELECT s.id, s.dashboard_id, s.status, s.version, s.created_at,
+      GREATEST(s.updated_at, COALESCE(latest.created_at, s.updated_at)) AS updated_at,
+      COALESCE(first_edit.prompt_text, '新会话') AS title,
+      COALESCE(stats.job_count, 0)::int AS job_count,
+      latest.state AS latest_job_state
+    FROM agent_sessions s
+    LEFT JOIN LATERAL (
+      SELECT prompt_text FROM agent_jobs
+      WHERE session_id = s.id AND purpose = 'edit'
+      ORDER BY created_at, id LIMIT 1
+    ) first_edit ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT count(*)::int AS job_count FROM agent_jobs
+      WHERE session_id = s.id AND purpose = 'edit'
+    ) stats ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT state, created_at FROM agent_jobs
+      WHERE session_id = s.id AND purpose = 'edit'
+      ORDER BY created_at DESC, id DESC LIMIT 1
+    ) latest ON TRUE
+    WHERE s.tenant_id = ${tenantId} AND s.dashboard_id = ${dashboardId}
+      AND EXISTS (
+        SELECT 1 FROM agent_jobs
+        WHERE session_id = s.id AND purpose = 'edit'
+      )
+    ORDER BY updated_at DESC, s.id DESC
+    LIMIT ${limit}
+  `;
+  return [...rows].map((value) => {
+    const row = value as Row;
+    const title = String(row.title).trim().replace(/\s+/gu, " ").slice(0, 200);
+    return {
+      ...toAgentSession(row),
+      title: title || "新会话",
+      jobCount: Number(row.job_count),
+      ...(row.latest_job_state
+        ? {
+            latestJobState:
+              row.latest_job_state as AgentSessionSummary["latestJobState"],
+          }
+        : {}),
+    };
+  });
+}
+
+export async function getAgentSessionTimeline(
+  db: SQL,
+  tenantId: string,
+  sessionId: string,
+  limit: number,
+): Promise<AgentSessionTimeline | undefined> {
+  const sessions = await db`
+    SELECT id, dashboard_id, status, version, created_at, updated_at
+    FROM agent_sessions
+    WHERE tenant_id = ${tenantId} AND id = ${sessionId}
+    LIMIT 1
+  `;
+  const sessionRow = sessions[0] as Row | undefined;
+  if (!sessionRow) return undefined;
+
+  const jobs = await db`
+    SELECT id, dashboard_id, session_id, purpose, prompt_text, state,
+      attempt_count, cancellation_requested_at, terminal_error, version,
+      created_at, started_at, finished_at
+    FROM agent_jobs
+    WHERE tenant_id = ${tenantId} AND session_id = ${sessionId}
+      AND purpose = 'edit'
+    ORDER BY created_at, id
+    LIMIT ${limit + 1}
+  `;
+  const truncated = jobs.length > limit;
+  const selected = [...jobs].slice(0, limit);
+  const turns = await Promise.all(
+    selected.map(async (value) => {
+      const row = value as Row;
+      const job = toAgentJob(row);
+      return {
+        job,
+        message: String(row.prompt_text),
+        events: await listAgentEvents(db, tenantId, job.id, 0, 20_000),
+      };
+    }),
+  );
+  return { session: toAgentSession(sessionRow), turns, truncated };
 }
 
 export async function listAgentEvents(

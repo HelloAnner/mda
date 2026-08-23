@@ -87,6 +87,44 @@ export const AgentJobListResponseSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const AgentSessionSummarySchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1 }),
+    dashboardId: Type.String({ minLength: 1 }),
+    status: Type.Union([Type.Literal("open"), Type.Literal("closed")]),
+    version: Type.Integer({ minimum: 1 }),
+    title: Type.String({ minLength: 1, maxLength: 200 }),
+    jobCount: Type.Integer({ minimum: 0 }),
+    latestJobState: Type.Optional(AgentJobStateSchema),
+    createdAt: Type.String({ minLength: 1 }),
+    updatedAt: Type.String({ minLength: 1 }),
+  },
+  { $id: "AgentSessionSummaryV1", additionalProperties: false },
+);
+
+export const AgentSessionListResponseSchema = Type.Object(
+  { items: Type.Array(AgentSessionSummarySchema, { maxItems: 100 }) },
+  { $id: "AgentSessionListResponseV1", additionalProperties: false },
+);
+
+export const AgentSessionTurnSchema = Type.Object(
+  {
+    job: AgentJobSchema,
+    message: Type.String({ minLength: 1, maxLength: 20_000 }),
+    events: Type.Array(AgentEventSchema, { maxItems: 20_000 }),
+  },
+  { $id: "AgentSessionTurnV1", additionalProperties: false },
+);
+
+export const AgentSessionTimelineSchema = Type.Object(
+  {
+    session: AgentSessionSchema,
+    turns: Type.Array(AgentSessionTurnSchema, { maxItems: 100 }),
+    truncated: Type.Boolean(),
+  },
+  { $id: "AgentSessionTimelineV1", additionalProperties: false },
+);
+
 export const CreateAgentJobRequestSchema = Type.Object(
   {
     message: Type.String({ minLength: 1, maxLength: 20_000, pattern: "\\S" }),
@@ -102,5 +140,11 @@ export type AgentJobListResponse = Static<typeof AgentJobListResponseSchema>;
 export type AgentJobPurpose = Static<typeof AgentJobPurposeSchema>;
 export type AgentJobState = Static<typeof AgentJobStateSchema>;
 export type AgentSession = Static<typeof AgentSessionSchema>;
+export type AgentSessionListResponse = Static<
+  typeof AgentSessionListResponseSchema
+>;
+export type AgentSessionSummary = Static<typeof AgentSessionSummarySchema>;
+export type AgentSessionTimeline = Static<typeof AgentSessionTimelineSchema>;
+export type AgentSessionTurn = Static<typeof AgentSessionTurnSchema>;
 export type AgentTerminalError = Static<typeof AgentTerminalErrorSchema>;
 export type CreateAgentJobRequest = Static<typeof CreateAgentJobRequestSchema>;
