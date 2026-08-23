@@ -11,12 +11,13 @@ import { type ApiClientConfig, apiFetch, apiRequest } from "../client/api.ts";
 export async function chat(
   config: ApiClientConfig,
   dashboardId: string,
+  initialSessionId?: string,
 ): Promise<void> {
   const terminal = createInterface({
     input: process.stdin,
     output: process.stdout,
   });
-  let sessionId: string | undefined;
+  let sessionId = initialSessionId;
   try {
     while (true) {
       let answer: string;

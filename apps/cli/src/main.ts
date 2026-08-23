@@ -46,7 +46,7 @@ Usage:
 
 Commands:
   doctor
-  chat <dashboard-id>
+  chat <dashboard-id> [--session <session-id>]
   dashboard list [--limit <n>]
   dashboard create --name <name> [--description <text>] [--idempotency-key <key>]
   dashboard show <dashboard-id>
@@ -197,6 +197,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
         params: { type: "string" },
         publication: { type: "string" },
         revision: { type: "string" },
+        session: { type: "string" },
         source: { type: "string" },
         tenant: { type: "string" },
         version: { type: "boolean", short: "V" },
@@ -288,7 +289,11 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
         console.error("chat requires a Dashboard ID");
         return 2;
       }
-      await chat(config, parsed.positionals[1] ?? "");
+      await chat(
+        config,
+        parsed.positionals[1] ?? "",
+        stringValue(parsed.values.session),
+      );
       return 0;
     }
 
