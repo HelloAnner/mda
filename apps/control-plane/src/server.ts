@@ -21,6 +21,7 @@ import { handleShareRequest } from "./contexts/shares/routes.ts";
 import { type ArtifactStore, S3ArtifactStore } from "./shared/artifacts.ts";
 import {
   authorizeGlobalAccess,
+  createAccountAuthenticator,
   createAuthenticator,
   createLocalAuthenticator,
   ensureLocalPrincipal,
@@ -28,6 +29,7 @@ import {
 } from "./shared/auth.ts";
 import { createDatabase } from "./shared/db.ts";
 import { errorResponse, HttpError } from "./shared/http.ts";
+import { handleAuthRequest } from "./contexts/auth/routes.ts";
 
 const service = "mda-main";
 const health: HealthResponse = {
@@ -47,6 +49,8 @@ interface ServerDependencies {
   internalAgentToken?: string;
   agentLeaseMs?: number;
   accessPassword?: string;
+  authMode?: "oidc" | "password" | "account";
+  sessionSigningKey?: string;
   redis?: RedisClient;
   artifacts?: ArtifactStore;
   previewSigningKey?: string;
@@ -152,6 +156,10 @@ export function startServer(
             );
           }
         }
+        if (dependencies.authMode === "account") {
+          const authResponse = await handleAuthRequest(request, dependencies);
+          if (authResponse) return authResponse;
+        }
         const agentDataResponse = await handleAgentDataRequest(
           request,
           dependencies,
@@ -222,19 +230,32 @@ if (import.meta.main) {
   await artifacts.ready();
   startAgentJobDispatcher(db, redis);
   if (config.authMode === "password") {
-    await ensureLocalPrincipal(db, config.localTenantId, config.localUserId);
+    await ensureLocalPrincipal(
+      db,
+      config.localTenantId ?? "local",
+      config.localUserId ?? "local-admin",
+    );
   }
   const authenticate =
-    config.authMode === "password"
-      ? createLocalAuthenticator(db, config.localTenantId, config.localUserId)
-      : createAuthenticator(
-          {
-            oidcIssuer: config.oidcIssuer as string,
-            oidcAudience: config.oidcAudience as string,
-            oidcJwksUrl: config.oidcJwksUrl as string,
-          },
+    config.authMode === "account"
+      ? createAccountAuthenticator({
           db,
-        );
+          sessionSigningKey: config.sessionSigningKey as string,
+        })
+      : config.authMode === "password"
+        ? createLocalAuthenticator(
+            db,
+            config.localTenantId ?? "local",
+            config.localUserId ?? "local-admin",
+          )
+        : createAuthenticator(
+            {
+              oidcIssuer: config.oidcIssuer as string,
+              oidcAudience: config.oidcAudience as string,
+              oidcJwksUrl: config.oidcJwksUrl as string,
+            },
+            db,
+          );
   const dataSources = new DataSourceClient(
     config.dataSourceUrl,
     config.dataSourceInternalToken,
@@ -245,6 +266,8 @@ if (import.meta.main) {
     internalAgentToken: config.internalAgentToken,
     agentLeaseMs: config.agentLeaseMs,
     accessPassword: config.accessPassword,
+    authMode: config.authMode,
+    sessionSigningKey: config.sessionSigningKey,
     redis,
     artifacts,
     previewSigningKey: config.previewSigningKey,

@@ -5,14 +5,17 @@ import type {
   Dashboard,
 } from "@mda/contracts";
 import {
-  Archive,
   ArrowUp,
   Copy,
-  Files,
+  FileText,
+  Image,
   LayoutDashboard,
-  Save,
-  Share2,
+  Mic,
+  Paperclip,
+  Phone,
+  RefreshCw,
   Square,
+  X,
 } from "lucide-react";
 import {
   type KeyboardEvent,
@@ -64,26 +67,26 @@ interface ChatWorkspaceProps {
   onBoardProgress(update: BoardProgressUpdate): void;
 }
 
-const suggestions = [
-  "创建一块面向管理层的销售经营看板，先和我确认指标口径",
-  "基于已有数据源设计一块能发现异常的运营看板",
-  "检查当前看板的移动布局、空状态和可访问性",
-  "为当前看板增加筛选、趋势对比与明细行动区",
+const recommendations = [
+  { icon: <LayoutDashboard size={18} />, text: "创建一块面向管理层的销售经营看板" },
+  { icon: <FileText size={18} />, text: "基于已有数据源设计能发现异常的运营看板" },
+  { icon: <Image size={18} />, text: "检查当前看板的移动布局和空状态" },
+];
+
+const chips = [
+  "销售经营看板",
+  "异常检测看板",
+  "移动布局检查",
+  "数据探索",
+  "更多",
 ];
 
 export function ChatWorkspace({
   api,
   dashboard,
   sessionId,
-  boardOpen,
-  revisionOpen,
   onSessionChange,
   onSessionsRefresh,
-  onEdit,
-  onSave,
-  onShare,
-  onToggleBoard,
-  onToggleRevisions,
   onBoardProgress,
 }: ChatWorkspaceProps) {
   const { notify } = useToast();
@@ -256,54 +259,10 @@ export function ChatWorkspace({
     }
   }
 
-  const conversationTitle =
-    turns[0]?.message.trim().replace(/\s+/gu, " ").slice(0, 80) ||
-    dashboard.name;
+  const isEmpty = turns.length === 0 && !loading && !sessionId;
 
   return (
     <main className="chat-panel">
-      <header className="chat-header">
-        <div className="chat-title">
-          <button type="button" onClick={onEdit} title="编辑看板信息">
-            <span>{conversationTitle}</span>
-          </button>
-          {dashboard.status === "archived" && (
-            <span className="archived-badge">已归档</span>
-          )}
-        </div>
-        <div className="header-actions">
-          <IconButton
-            label="保存看板"
-            onClick={onSave}
-            disabled={dashboard.status !== "active"}
-          >
-            <Save size={15} />
-          </IconButton>
-          <IconButton
-            label="发布与分享"
-            onClick={onShare}
-            disabled={dashboard.status !== "active"}
-          >
-            <Share2 size={15} />
-          </IconButton>
-          <i />
-          <IconButton
-            label="智能看板"
-            active={boardOpen}
-            onClick={onToggleBoard}
-          >
-            <LayoutDashboard size={16} />
-          </IconButton>
-          <IconButton
-            label="版本文件"
-            active={revisionOpen}
-            onClick={onToggleRevisions}
-          >
-            <Files size={16} />
-          </IconButton>
-        </div>
-      </header>
-
       <div
         className="message-scroll"
         ref={scrollRef}
@@ -316,27 +275,81 @@ export function ChatWorkspace({
       >
         {loading ? (
           <div className="conversation-loading">
-            <span />
-            <span />
-            <span />
+            <span /><span /><span />
           </div>
-        ) : turns.length === 0 ? (
-          <section className="conversation-home">
-            <div className="home-dots" aria-hidden="true" />
-            <div className="home-content">
-              <span className="home-mark">M</span>
-              <h1>今天想构建什么看板？</h1>
-              <p>先说清楚受众、要做的决定和可用数据，MDA 会与你逐步完成。</p>
-              <div className="recommendation-card">
-                <span>从这里开始</span>
-                {suggestions.map((suggestion) => (
+        ) : isEmpty ? (
+          <section className="home-center">
+            <h1 className="hero">我能为你做什么？</h1>
+            <div className="prompt-stack">
+              <section className="composer">
+                <textarea
+                  value={message}
+                  onChange={(event) =>
+                    setMessage(event.target.value.slice(0, 20_000))
+                  }
+                  onKeyDown={keyDown}
+                  placeholder="向 MDA 描述你想构建的看板，不消耗积分"
+                  aria-label="消息"
+                  disabled={sending}
+                  rows={2}
+                />
+                <div className="composer-tools">
+                  <button className="round-button" aria-label="添加附件">
+                    <Paperclip size={16} />
+                  </button>
+                  <button className="tool-pill">
+                    <LayoutDashboard size={14} /> MDA 桌面端
+                  </button>
+                  <span className="composer-spacer" />
+                  <button className="icon-button" aria-label="语音聊天">
+                    <Phone size={16} />
+                  </button>
+                  <button className="icon-button" aria-label="麦克风">
+                    <Mic size={16} />
+                  </button>
                   <button
-                    type="button"
-                    onClick={() => void send(suggestion)}
-                    key={suggestion}
+                    className="submit-button"
+                    disabled={!message.trim() || sending}
+                    aria-label="发送"
+                    onClick={() => void send()}
                   >
-                    <span>{suggestion}</span>
-                    <ArrowUp size={14} />
+                    <ArrowUp size={18} />
+                  </button>
+                </div>
+              </section>
+              <section className="recommendations">
+                <div className="recommend-head">
+                  <span className="recommend-title">为您推荐</span>
+                  <span className="recommend-actions">
+                    <button className="icon-button" aria-label="刷新推荐">
+                      <RefreshCw size={16} />
+                    </button>
+                    <button className="icon-button" aria-label="忽略推荐">
+                      <X size={16} />
+                    </button>
+                  </span>
+                </div>
+                <div className="recommend-grid">
+                  {recommendations.map((item, index) => (
+                    <button
+                      type="button"
+                      className="recommend-card"
+                      key={index}
+                      onClick={() => void send(item.text)}
+                    >
+                      <span className="corner">
+                        <ArrowUp size={14} />
+                      </span>
+                      {item.icon}
+                      <p>{item.text}</p>
+                    </button>
+                  ))}
+                </div>
+              </section>
+              <div className="chips">
+                {chips.map((chip) => (
+                  <button className="chip" key={chip} onClick={() => void send(chip)}>
+                    {chip}
                   </button>
                 ))}
               </div>
@@ -401,7 +414,7 @@ export function ChatWorkspace({
         )}
       </div>
 
-      {dashboard.status === "active" ? (
+      {!isEmpty && dashboard.status === "active" && (
         <footer className="composer-area">
           <div className="composer">
             <textarea
@@ -413,29 +426,37 @@ export function ChatWorkspace({
               placeholder="描述需求，继续完善这块看板"
               aria-label="消息"
               disabled={sending}
+              rows={2}
             />
-            <div className="composer-actions">
-              <span>
-                {message.length
-                  ? `${message.length.toLocaleString("zh-CN")} / 20,000`
-                  : "Enter 发送 · Shift + Enter 换行"}
-              </span>
+            <div className="composer-tools">
+              <button className="round-button" aria-label="添加附件">
+                <Paperclip size={16} />
+              </button>
+              <button className="tool-pill">
+                <LayoutDashboard size={14} /> MDA 桌面端
+              </button>
+              <span className="composer-spacer" />
+              <button className="icon-button" aria-label="语音聊天">
+                <Phone size={16} />
+              </button>
+              <button className="icon-button" aria-label="麦克风">
+                <Mic size={16} />
+              </button>
               {activeTurn ? (
                 <button
-                  type="button"
-                  className="stop-button"
+                  className="round-button"
                   onClick={() => void cancel()}
                   title="停止生成"
+                  aria-label="停止生成"
                 >
-                  <Square size={12} fill="currentColor" />
+                  <Square size={14} fill="currentColor" />
                 </button>
               ) : (
                 <button
-                  type="button"
-                  className="send-button"
-                  onClick={() => void send()}
+                  className="submit-button"
                   disabled={!message.trim() || sending}
-                  title="发送"
+                  aria-label="发送"
+                  onClick={() => void send()}
                 >
                   <ArrowUp size={18} />
                 </button>
@@ -444,9 +465,11 @@ export function ChatWorkspace({
           </div>
           <div className="ai-note">内容由 AI 生成，请仔细甄别</div>
         </footer>
-      ) : (
+      )}
+
+      {dashboard.status !== "active" && !isEmpty && (
         <footer className="archived-note">
-          <Archive size={15} /> 这块看板已经归档，历史内容仍可查看。
+          这块看板已经归档，历史内容仍可查看。
         </footer>
       )}
     </main>

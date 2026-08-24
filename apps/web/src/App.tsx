@@ -6,13 +6,16 @@ import type {
 } from "@mda/contracts";
 import {
   Check,
-  FolderPlus,
+  Files,
   LayoutDashboard,
   LogOut,
   Moon,
   Plus,
+  Save,
+  Search,
   Server,
-  Settings,
+  Share2,
+  Sparkles,
   Sun,
 } from "lucide-react";
 import {
@@ -34,32 +37,32 @@ import {
   type BoardProgressUpdate,
   ChatWorkspace,
 } from "./components/ChatWorkspace.tsx";
-import { ConnectionScreen } from "./components/ConnectionScreen.tsx";
+import { AuthScreen } from "./components/AuthScreen.tsx";
+import { LandingScreen } from "./components/LandingScreen.tsx";
 import { RevisionDrawer } from "./components/RevisionDrawer.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
+import { WorkspaceHome } from "./components/WorkspaceHome.tsx";
 import {
   Button,
   ConfirmDialog,
   Dialog,
-  EmptyState,
   Field,
   FormDialog,
   ToastProvider,
   useToast,
 } from "./components/Ui.tsx";
-import {
-  ApiClient,
-  type ConnectionSettings,
-  clearConnection,
-  loadConnection,
-  saveConnection,
-} from "./lib/api.ts";
+import { ApiClient, type AuthMeResponse } from "./lib/api.ts";
 import { DataSourcesModule } from "./modules/DataSources.tsx";
 import { JobsModule } from "./modules/Jobs.tsx";
 import { QueriesModule } from "./modules/Queries.tsx";
 
 type View = "chat" | "sources" | "queries" | "jobs";
 type Drawer = "board" | "revisions";
+
+type AuthStatus =
+  | { status: "checking" }
+  | { status: "guest"; screen: "landing" | "auth" }
+  | { status: "authenticated"; user: AuthMeResponse };
 
 interface DashboardEditor {
   dashboard?: Dashboard;
@@ -122,44 +125,97 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function isAuthError(error: unknown): boolean {
+  return /UNAUTHENTICATED|INVALID_CREDENTIALS/i.test(errorText(error));
+}
+
 export default function App() {
-  const [connection, setConnection] = useState<ConnectionSettings | undefined>(
-    () => loadConnection(),
+  const api = useMemo(() => new ApiClient(), []);
+  const [auth, setAuth] = useState<AuthStatus>({ status: "checking" });
+  const [pendingMessage, setPendingMessage] = useState<string | undefined>();
+
+  useEffect(() => {
+    api
+      .me()
+      .then((user) => setAuth({ status: "authenticated", user }))
+      .catch(() => setAuth({ status: "guest", screen: "landing" }));
+  }, [api]);
+
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const goToAuth = useCallback(
+    (mode: "login" | "register", message?: string) => {
+      setAuthMode(mode);
+      if (message) setPendingMessage(message);
+      setAuth({ status: "guest", screen: "auth" });
+    },
+    [],
   );
-  const connected = useCallback((settings: ConnectionSettings) => {
-    saveConnection(settings);
-    setConnection(settings);
+
+  const goToLanding = useCallback(() => {
+    setPendingMessage(undefined);
+    setAuth({ status: "guest", screen: "landing" });
   }, []);
-  const disconnected = useCallback(() => {
-    clearConnection();
-    setConnection(undefined);
+
+  const onAuth = useCallback((user: AuthMeResponse) => {
+    setAuth({ status: "authenticated", user });
   }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await api.logout();
+    } catch {
+      // ignore
+    }
+    setPendingMessage(undefined);
+    setAuth({ status: "guest", screen: "landing" });
+  }, [api]);
+
   return (
     <ToastProvider>
-      {connection ? (
-        <Workspace
-          connection={connection}
-          onConnection={connected}
-          onDisconnect={disconnected}
-        />
+      {auth.status === "checking" ? (
+        <div className="app-loading">
+          <span className="brand-mark">M</span>
+          <p>正在准备工作空间</p>
+        </div>
+      ) : auth.status === "guest" ? (
+        auth.screen === "landing" ? (
+          <LandingScreen
+            onLogin={() => goToAuth("login")}
+            onRegister={() => goToAuth("register")}
+            onStart={(message) => goToAuth("register", message)}
+          />
+        ) : (
+          <AuthScreen
+            api={api}
+            initialMode={authMode}
+            onAuth={onAuth}
+            onBack={goToLanding}
+          />
+        )
       ) : (
-        <ConnectionScreen onConnected={connected} />
+        <Workspace
+          api={api}
+          user={auth.user}
+          initialMessage={pendingMessage}
+          onLogout={logout}
+        />
       )}
     </ToastProvider>
   );
 }
 
 function Workspace({
-  connection,
-  onConnection,
-  onDisconnect,
+  api,
+  user,
+  initialMessage,
+  onLogout,
 }: {
-  connection: ConnectionSettings;
-  onConnection(settings: ConnectionSettings): void;
-  onDisconnect(): void;
+  api: ApiClient;
+  user: AuthMeResponse;
+  initialMessage?: string;
+  onLogout(): void;
 }) {
   const { notify } = useToast();
-  const api = useMemo(() => new ApiClient(connection), [connection]);
   const initialRoute = useMemo(route, []);
   const [theme, setTheme] = useState<"light" | "dark">(currentTheme);
   const [view, setView] = useState<View>(initialRoute.view);
@@ -196,10 +252,10 @@ function Workspace({
   );
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    document.documentElement.className = theme;
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", theme === "light" ? "#FAF9F7" : "#0A0A0F");
+      ?.setAttribute("content", theme === "light" ? "#f8f8f7" : "#1a1a1a");
     localStorage.setItem("mda.theme", theme);
   }, [theme]);
 
@@ -224,17 +280,41 @@ function Workspace({
       });
     } catch (error) {
       notify(errorText(error), "error");
-      if (/ACCESS_PASSWORD_REQUIRED|UNAUTHENTICATED/i.test(errorText(error))) {
-        onDisconnect();
+      if (isAuthError(error)) {
+        onLogout();
       }
     } finally {
       setLoading(false);
     }
-  }, [api, notify, onDisconnect]);
+  }, [api, notify, onLogout]);
 
   useEffect(() => {
     void refreshCore();
   }, [refreshCore]);
+
+  const bootstrappedRef = useRef(false);
+  async function createFirstDashboard(message: string) {
+    setSubmitting(true);
+    try {
+      const name = message.slice(0, 30).trim() || "新看板";
+      const dashboard = await api.createDashboard({ name });
+      const job = await api.sendMessage(dashboard.id, message);
+      await refreshCore();
+      chooseDashboard(dashboard.id);
+      activeSessionRef.current = job.sessionId;
+      setActiveSessionId(job.sessionId);
+    } catch (error) {
+      notify(errorText(error), "error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+  useEffect(() => {
+    if (initialMessage && !bootstrappedRef.current && !loading) {
+      bootstrappedRef.current = true;
+      void createFirstDashboard(initialMessage);
+    }
+  }, [initialMessage, loading]);
 
   const refreshSessions = useCallback(async () => {
     if (!activeDashboardId) {
@@ -287,6 +367,16 @@ function Workspace({
     setDrawer(undefined);
     setDrawerMaximized(false);
     setRoute(next);
+  }
+
+  function chooseHome() {
+    setView("chat");
+    setActiveDashboardId(undefined);
+    activeSessionRef.current = undefined;
+    setActiveSessionId(undefined);
+    setDrawer(undefined);
+    setDrawerMaximized(false);
+    setRoute("chat");
   }
 
   function chooseSession(id?: string) {
@@ -371,7 +461,8 @@ function Workspace({
         activeDashboardId={activeDashboardId}
         activeSessionId={activeSessionId}
         view={view}
-        tenant={connection.tenant || "local"}
+        accountName={user.user.username}
+        onHome={chooseHome}
         onToggle={() => setSidebarCollapsed((value) => !value)}
         onSelectDashboard={chooseDashboard}
         onSelectSession={chooseSession}
@@ -387,58 +478,96 @@ function Workspace({
         onSettings={() => setSettingsOpen(true)}
       />
 
-      <div className="workspace-group">
-        {loading ? (
-          <div className="app-loading">
-            <span className="brand-mark">M</span>
-            <p>正在准备工作空间</p>
-          </div>
-        ) : view === "sources" ? (
-          <DataSourcesModule api={api} />
-        ) : view === "queries" ? (
-          <QueriesModule api={api} />
-        ) : view === "jobs" ? (
-          <JobsModule api={api} dashboards={dashboards} />
-        ) : activeDashboard ? (
-          <ChatWorkspace
-            api={api}
-            dashboard={activeDashboard}
-            sessionId={activeSessionId}
-            boardOpen={drawer === "board"}
-            revisionOpen={drawer === "revisions"}
-            onSessionChange={chooseSession}
-            onSessionsRefresh={refreshSessions}
-            onEdit={() => setDashboardEditor({ dashboard: activeDashboard })}
-            onSave={() => openSave()}
-            onShare={() => setShareOpen(true)}
-            onToggleBoard={() => {
-              setDrawer((current) =>
-                current === "board" ? undefined : "board",
-              );
-              setDrawerMaximized(false);
-            }}
-            onToggleRevisions={() => {
-              setDrawer((current) =>
-                current === "revisions" ? undefined : "revisions",
-              );
-              setDrawerMaximized(false);
-            }}
-            onBoardProgress={boardProgressChange}
-          />
-        ) : (
-          <main className="no-dashboard-page">
-            <EmptyState
-              icon={<LayoutDashboard size={22} />}
-              title="创建第一块看板"
-              description="每块看板都有独立的对话、源码版本、预览、发布和分享记录。"
-              action={
-                <Button tone="primary" onClick={() => setDashboardEditor({})}>
-                  <Plus size={14} /> 新建看板
-                </Button>
-              }
-            />
-          </main>
+      <div className={`main${view === "chat" && !activeDashboard ? " is-home" : ""}`}>
+        {(view !== "chat" || activeDashboard) && (
+          <header className="topbar">
+            <div className="top-left">
+              <button type="button" className="model-trigger">
+                <span className="model-name">
+                  {activeDashboard?.name ?? "MDA Agent"}
+                </span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+              <span className="promo-tag">
+                <Sparkles size={14} /> MDA 智能看板
+              </span>
+            </div>
+            <div className="top-actions">
+              {view === "chat" && activeDashboard && (
+                <>
+                  <button className="icon-button" aria-label="保存看板" onClick={() => openSave()} disabled={activeDashboard.status !== "active"}>
+                    <Save size={16} />
+                  </button>
+                  <button className="icon-button" aria-label="发布与分享" onClick={() => setShareOpen(true)} disabled={activeDashboard.status !== "active"}>
+                    <Share2 size={16} />
+                  </button>
+                  <i />
+                  <button className={`icon-button${drawer === "board" ? " is-active" : ""}`} aria-label="智能看板" onClick={() => {
+                    setDrawer((current) => current === "board" ? undefined : "board");
+                    setDrawerMaximized(false);
+                  }}>
+                    <LayoutDashboard size={16} />
+                  </button>
+                  <button className={`icon-button${drawer === "revisions" ? " is-active" : ""}`} aria-label="版本文件" onClick={() => {
+                    setDrawer((current) => current === "revisions" ? undefined : "revisions");
+                    setDrawerMaximized(false);
+                  }}>
+                    <Files size={16} />
+                  </button>
+                </>
+              )}
+              <i />
+              <button className="icon-button" aria-label="搜索">
+                <Search size={16} />
+              </button>
+            </div>
+          </header>
         )}
+
+        <div className="stage">
+          {loading ? (
+            <div className="app-loading">
+              <span className="brand-mark">M</span>
+              <p>正在准备工作空间</p>
+            </div>
+          ) : view === "sources" ? (
+            <DataSourcesModule api={api} />
+          ) : view === "queries" ? (
+            <QueriesModule api={api} />
+          ) : view === "jobs" ? (
+            <JobsModule api={api} dashboards={dashboards} />
+          ) : activeDashboard ? (
+            <ChatWorkspace
+              api={api}
+              dashboard={activeDashboard}
+              sessionId={activeSessionId}
+              boardOpen={drawer === "board"}
+              revisionOpen={drawer === "revisions"}
+              onSessionChange={chooseSession}
+              onSessionsRefresh={refreshSessions}
+              onEdit={() => setDashboardEditor({ dashboard: activeDashboard })}
+              onSave={() => openSave()}
+              onShare={() => setShareOpen(true)}
+              onToggleBoard={() => {
+                setDrawer((current) =>
+                  current === "board" ? undefined : "board",
+                );
+                setDrawerMaximized(false);
+              }}
+              onToggleRevisions={() => {
+                setDrawer((current) =>
+                  current === "revisions" ? undefined : "revisions",
+                );
+                setDrawerMaximized(false);
+              }}
+              onBoardProgress={boardProgressChange}
+            />
+          ) : (
+            <WorkspaceHome onStart={createFirstDashboard} />
+          )}
+        </div>
 
         {view === "chat" && activeDashboard && drawer === "board" && (
           <BoardDrawer
@@ -609,18 +738,14 @@ function Workspace({
         </>
       )}
 
-      <SettingsDialog
+      <AccountDialog
         open={settingsOpen}
-        connection={connection}
+        user={user}
         theme={theme}
         metadata={metadata}
         onTheme={setTheme}
         onClose={() => setSettingsOpen(false)}
-        onSave={(settings) => {
-          setSettingsOpen(false);
-          onConnection(settings);
-        }}
-        onDisconnect={onDisconnect}
+        onLogout={onLogout}
       />
 
       {fly && <SaveFly state={fly} />}
@@ -759,9 +884,6 @@ function FolderForm({
         onSubmit({ name: name.trim(), parentId });
       }}
     >
-      <div className="folder-dialog-icon">
-        <FolderPlus size={18} />
-      </div>
       <Field label="名称" required>
         <input
           value={name}
@@ -789,44 +911,42 @@ function FolderForm({
   );
 }
 
-function SettingsDialog({
+function AccountDialog({
   open,
-  connection,
+  user,
   theme,
   metadata,
   onTheme,
   onClose,
-  onSave,
-  onDisconnect,
+  onLogout,
 }: {
   open: boolean;
-  connection: ConnectionSettings;
+  user: AuthMeResponse;
   theme: "light" | "dark";
   metadata?: ServiceMetadata;
   onTheme(theme: "light" | "dark"): void;
   onClose(): void;
-  onSave(settings: ConnectionSettings): void;
-  onDisconnect(): void;
+  onLogout(): void;
 }) {
-  const [tenant, setTenant] = useState(connection.tenant);
-  const [password, setPassword] = useState(connection.accessPassword);
-  const [token, setToken] = useState(connection.token);
-  useEffect(() => {
-    if (open) {
-      setTenant(connection.tenant);
-      setPassword(connection.accessPassword);
-      setToken(connection.token);
-    }
-  }, [connection, open]);
   return (
     <Dialog
       open={open}
-      title="工作空间设置"
-      description="连接凭据仅保留在当前标签页。"
+      title="账户"
+      description="当前登录的 MDA 账户。"
       onClose={onClose}
-      width={560}
+      width={420}
     >
       <div className="settings-sections">
+        <section className="service-card">
+          <span>
+            <Server size={16} />
+          </span>
+          <div>
+            <strong>{user.user.username}</strong>
+            <small>{metadata?.service ?? "mda-main"}</small>
+          </div>
+          <i />
+        </section>
         <section>
           <h3>外观</h3>
           <div className="theme-segment">
@@ -846,30 +966,6 @@ function SettingsDialog({
             </button>
           </div>
         </section>
-        <section>
-          <h3>连接</h3>
-          <Field label="租户">
-            <input
-              value={tenant}
-              onChange={(event) => setTenant(event.target.value)}
-            />
-          </Field>
-          <Field label="访问密码">
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </Field>
-          <Field label="Bearer Token">
-            <input
-              type="password"
-              value={token}
-              onChange={(event) => setToken(event.target.value)}
-              placeholder="可选"
-            />
-          </Field>
-        </section>
         <section className="service-card">
           <span>
             <Server size={16} />
@@ -884,23 +980,11 @@ function SettingsDialog({
           <i />
         </section>
         <div className="settings-actions">
-          <Button tone="danger" onClick={onDisconnect}>
-            <LogOut size={14} /> 断开连接
+          <Button tone="danger" onClick={onLogout}>
+            <LogOut size={14} /> 退出登录
           </Button>
           <span />
-          <Button onClick={onClose}>取消</Button>
-          <Button
-            tone="primary"
-            onClick={() =>
-              onSave({
-                tenant: tenant.trim() || "local",
-                accessPassword: password.trim(),
-                token: token.trim(),
-              })
-            }
-          >
-            <Settings size={14} /> 保存连接
-          </Button>
+          <Button onClick={onClose}>关闭</Button>
         </div>
       </div>
     </Dialog>

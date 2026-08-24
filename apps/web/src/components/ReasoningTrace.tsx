@@ -26,7 +26,7 @@ function ProcessIcon({
       <path
         d="M4.25 8.1 6.75 10.5l5-5"
         fill="none"
-        stroke="var(--moss-color-surface-primary)"
+        stroke="var(--background-gray-main)"
         strokeWidth="1.8"
         strokeLinecap="round"
         strokeLinejoin="round"

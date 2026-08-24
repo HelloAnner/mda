@@ -70,10 +70,15 @@ const GlobalConfigFileSchema = Type.Object(
       Type.Object(
         {
           mode: Type.Optional(
-            Type.Union([Type.Literal("oidc"), Type.Literal("password")]),
+            Type.Union([
+              Type.Literal("oidc"),
+              Type.Literal("password"),
+              Type.Literal("account"),
+            ]),
           ),
           tenant_id: Type.Optional(Type.String({ minLength: 1 })),
           user_id: Type.Optional(Type.String({ minLength: 1 })),
+          session_signing_key_env: Type.Optional(EnvironmentNameSchema),
         },
         { additionalProperties: false },
       ),
@@ -136,15 +141,20 @@ const ConfigSchema = Type.Object(
     artifactRegion: Type.String({ minLength: 1 }),
     artifactAccessKeyId: Type.String({ minLength: 3 }),
     artifactSecretAccessKey: Type.String({ minLength: 8 }),
-    authMode: Type.Union([Type.Literal("oidc"), Type.Literal("password")]),
-    localTenantId: Type.String({ minLength: 1 }),
-    localUserId: Type.String({ minLength: 1 }),
+    authMode: Type.Union([
+      Type.Literal("oidc"),
+      Type.Literal("password"),
+      Type.Literal("account"),
+    ]),
+    localTenantId: Type.Optional(Type.String({ minLength: 1 })),
+    localUserId: Type.Optional(Type.String({ minLength: 1 })),
     oidcIssuer: Type.Optional(Type.String({ minLength: 1 })),
     oidcAudience: Type.Optional(Type.String({ minLength: 1 })),
     oidcJwksUrl: Type.Optional(Type.String({ minLength: 1 })),
     internalAgentToken: Type.String({ minLength: 32 }),
     agentLeaseMs: Type.Integer({ minimum: 5_000, maximum: 300_000 }),
-    accessPassword: Type.String({ minLength: 16 }),
+    accessPassword: Type.Optional(Type.String({ minLength: 16 })),
+    sessionSigningKey: Type.Optional(Type.String({ minLength: 32 })),
     previewSigningKey: Type.String({ minLength: 32 }),
     previewTtlSeconds: Type.Integer({ minimum: 60, maximum: 86_400 }),
     shareSigningKey: Type.String({ minLength: 32 }),
@@ -164,15 +174,16 @@ export interface Config {
   artifactRegion: string;
   artifactAccessKeyId: string;
   artifactSecretAccessKey: string;
-  authMode: "oidc" | "password";
-  localTenantId: string;
-  localUserId: string;
+  authMode: "oidc" | "password" | "account";
+  localTenantId?: string;
+  localUserId?: string;
   oidcIssuer?: string;
   oidcAudience?: string;
   oidcJwksUrl?: string;
   internalAgentToken: string;
   agentLeaseMs: number;
-  accessPassword: string;
+  accessPassword?: string;
+  sessionSigningKey?: string;
   previewSigningKey: string;
   previewTtlSeconds: number;
   shareSigningKey: string;
@@ -239,6 +250,11 @@ export function loadConfig(
     file.share?.signing_key_env ?? "MDA_SHARE_SIGNING_KEY";
   const dataSourceTokenEnv =
     file.data_source?.internal_token_env ?? "DATA_SOURCE_INTERNAL_TOKEN";
+  const sessionSigningKeyEnv =
+    file.auth?.session_signing_key_env ?? "MDA_SESSION_SIGNING_KEY";
+  const accessPasswordValue = env.MDA_ACCESS_PASSWORD ?? env[accessPasswordEnv];
+  const sessionSigningKeyValue =
+    env.MDA_SESSION_SIGNING_KEY ?? env[sessionSigningKeyEnv];
   const config = {
     hostname: env.HOST ?? file.server?.host ?? "0.0.0.0",
     port: Number(env.PORT ?? file.server?.port ?? 8080),
@@ -266,7 +282,8 @@ export function loadConfig(
       : {}),
     internalAgentToken: env.INTERNAL_AGENT_TOKEN ?? env[internalTokenEnv] ?? "",
     agentLeaseMs: Number(env.AGENT_LEASE_MS ?? file.agent?.lease_ms ?? 30_000),
-    accessPassword: env.MDA_ACCESS_PASSWORD ?? env[accessPasswordEnv] ?? "",
+    ...(accessPasswordValue ? { accessPassword: accessPasswordValue } : {}),
+    sessionSigningKey: sessionSigningKeyValue ?? "",
     previewSigningKey:
       env.MDA_PREVIEW_SIGNING_KEY ?? env[previewSigningKeyEnv] ?? "",
     previewTtlSeconds: Number(
@@ -297,6 +314,11 @@ export function loadConfig(
     (!config.oidcIssuer || !config.oidcAudience || !config.oidcJwksUrl)
   ) {
     throw new Error("Invalid configuration: OIDC settings are required");
+  }
+  if (config.authMode === "account" && !config.sessionSigningKey) {
+    throw new Error(
+      "Invalid configuration: MDA_SESSION_SIGNING_KEY is required for account auth mode",
+    );
   }
   return config;
 }

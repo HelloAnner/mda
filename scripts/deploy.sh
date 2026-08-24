@@ -46,7 +46,8 @@ ensure_local_secrets() {
       printf 'MINIO_SECRET_KEY=%s\n' "$(openssl rand -hex 32)"
       printf 'S3_BUCKET=mda-artifacts\n'
       printf 'INTERNAL_AGENT_TOKEN=%s\n' "$(openssl rand -hex 32)"
-      printf 'MDA_ACCESS_PASSWORD=%s\n' "$(openssl rand -hex 16)"
+      printf 'MDA_AUTH_MODE=%s\n' "account"
+      printf 'MDA_SESSION_SIGNING_KEY=%s\n' "$(openssl rand -hex 32)"
       printf 'MDA_PREVIEW_SIGNING_KEY=%s\n' "$(openssl rand -hex 32)"
       printf 'MDA_SHARE_SIGNING_KEY=%s\n' "$(openssl rand -hex 32)"
       printf 'DATA_SOURCE_INTERNAL_TOKEN=%s\n' "$(openssl rand -hex 32)"
@@ -67,6 +68,12 @@ ensure_local_secrets() {
   fi
   if ! grep -q '^S3_BUCKET=' "$LOCAL_ENV"; then
     printf 'S3_BUCKET=mda-artifacts\n' >>"$LOCAL_ENV"
+  fi
+  if ! grep -q '^MDA_AUTH_MODE=' "$LOCAL_ENV"; then
+    printf 'MDA_AUTH_MODE=account\n' >>"$LOCAL_ENV"
+  fi
+  if ! grep -q '^MDA_SESSION_SIGNING_KEY=' "$LOCAL_ENV"; then
+    printf 'MDA_SESSION_SIGNING_KEY=%s\n' "$(openssl rand -hex 32)" >>"$LOCAL_ENV"
   fi
   if ! grep -q '^MDA_PREVIEW_SIGNING_KEY=' "$LOCAL_ENV"; then
     printf 'MDA_PREVIEW_SIGNING_KEY=%s\n' "$(openssl rand -hex 32)" >>"$LOCAL_ENV"
@@ -112,6 +119,8 @@ bootstrap_remote_secrets() {
     $1 == "MINIO_ACCESS_KEY" ||
     $1 == "MINIO_SECRET_KEY" ||
     $1 == "S3_BUCKET" ||
+    $1 == "MDA_AUTH_MODE" ||
+    $1 == "MDA_SESSION_SIGNING_KEY" ||
     $1 == "MDA_PREVIEW_SIGNING_KEY" ||
     $1 == "MDA_SHARE_SIGNING_KEY" ||
     $1 == "DATA_SOURCE_INTERNAL_TOKEN" ||

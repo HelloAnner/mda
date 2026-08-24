@@ -5,8 +5,9 @@ import "./styles/tokens.css";
 import "./styles/app.css";
 
 const storedTheme = localStorage.getItem("mda.theme");
-document.documentElement.dataset.theme =
-  storedTheme === "dark" ? "dark" : "light";
+const prefersDark = matchMedia("(prefers-color-scheme: dark)").matches;
+document.documentElement.className =
+  storedTheme === "dark" || (!storedTheme && prefersDark) ? "dark" : "light";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("MDA root element is missing");

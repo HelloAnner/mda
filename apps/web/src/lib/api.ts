@@ -4,6 +4,7 @@ import type {
   AgentJobListResponse,
   AgentSessionListResponse,
   AgentSessionTimeline,
+  AuthMeResponse,
   CreateDashboardFolderRequest,
   CreateDashboardPreviewResponse,
   CreateDashboardRequest,
@@ -38,12 +39,6 @@ import type {
   UpdateDashboardRequest,
   UpdateDataSourceRequest,
 } from "@mda/contracts";
-
-export interface ConnectionSettings {
-  accessPassword: string;
-  tenant: string;
-  token: string;
-}
 
 interface ApiErrorBody {
   code?: unknown;
@@ -125,22 +120,11 @@ export function parseSseBlock(block: string): AgentEvent | undefined {
 }
 
 export class ApiClient {
-  constructor(readonly settings: ConnectionSettings) {}
-
   private headers(init?: HeadersInit, hasBody = false): Headers {
     const headers = new Headers(init);
     headers.set("x-mda-web-version", "0.1.0");
     headers.set("x-mda-contract-version", "1");
     headers.set("x-request-id", crypto.randomUUID());
-    if (this.settings.accessPassword) {
-      headers.set("x-mda-access-password", this.settings.accessPassword);
-    }
-    if (this.settings.tenant) {
-      headers.set("x-mda-tenant", this.settings.tenant);
-    }
-    if (this.settings.token) {
-      headers.set("authorization", `Bearer ${this.settings.token}`);
-    }
     if (hasBody && !headers.has("content-type")) {
       headers.set("content-type", "application/json");
     }
@@ -150,6 +134,7 @@ export class ApiClient {
   async fetch(path: string, init: RequestInit = {}): Promise<Response> {
     const response = await window.fetch(path, {
       ...init,
+      credentials: "same-origin",
       headers: this.headers(init.headers, init.body !== undefined),
     });
     if (response.ok) return response;
@@ -171,7 +156,29 @@ export class ApiClient {
   }
 
   async ready(): Promise<boolean> {
-    return (await window.fetch("/health/ready")).ok;
+    return (await window.fetch("/health/ready", { credentials: "same-origin" })).ok;
+  }
+
+  me(): Promise<AuthMeResponse> {
+    return this.request("/api/auth/me");
+  }
+
+  register(username: string, password: string): Promise<AuthMeResponse> {
+    return this.request("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+  }
+
+  login(username: string, password: string): Promise<AuthMeResponse> {
+    return this.request("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+  }
+
+  async logout(): Promise<void> {
+    await this.fetch("/api/auth/logout", { method: "POST" });
   }
 
   folders(): Promise<DashboardFolder[]> {
@@ -551,26 +558,5 @@ export class ApiClient {
   }
 }
 
-export function saveConnection(settings: ConnectionSettings): void {
-  sessionStorage.setItem("mda.connection", JSON.stringify(settings));
-}
+export type { AuthMeResponse } from "@mda/contracts";
 
-export function loadConnection(): ConnectionSettings | undefined {
-  try {
-    const value = sessionStorage.getItem("mda.connection");
-    if (!value) return undefined;
-    const parsed = JSON.parse(value) as Partial<ConnectionSettings>;
-    return {
-      accessPassword:
-        typeof parsed.accessPassword === "string" ? parsed.accessPassword : "",
-      tenant: typeof parsed.tenant === "string" ? parsed.tenant : "local",
-      token: typeof parsed.token === "string" ? parsed.token : "",
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-export function clearConnection(): void {
-  sessionStorage.removeItem("mda.connection");
-}

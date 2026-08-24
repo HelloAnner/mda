@@ -196,6 +196,16 @@ export {
   ShareLinkSchema,
 } from "./public/v1/share-links.ts";
 export {
+  type AuthMeResponse,
+  AuthMeResponseSchema,
+  type AuthUser,
+  AuthUserSchema,
+  type LoginRequest,
+  LoginRequestSchema,
+  type RegisterRequest,
+  RegisterRequestSchema,
+} from "./public/v1/auth.ts";
+export {
   CONTRACT_VERSION,
   type HealthResponse,
   HealthResponseSchema,

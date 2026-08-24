@@ -34,15 +34,15 @@ if (!script || !stylesheet) {
 await writeFile(
   resolve(outdir, "index.html"),
   `<!doctype html>
-<html lang="zh-CN" data-theme="light">
+<html lang="zh-CN" class="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#FAF9F7" />
+    <meta name="theme-color" content="#f8f8f7" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="/fonts/google-fonts.css" />
+    <link rel="stylesheet" href="/fonts/manus/noto-serif-sc-reference.css" />
     <link rel="stylesheet" href="/assets/${basename(stylesheet.path)}" />
     <title>MDA · 智能看板工作台</title>
   </head>
@@ -51,8 +51,7 @@ await writeFile(
     <script type="module" src="/assets/${basename(script.path)}"></script>
   </body>
 </html>
-`,
-);
+`);
 
 console.log(
   JSON.stringify({
